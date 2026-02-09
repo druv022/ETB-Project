@@ -12,11 +12,16 @@ etb_project/
 │   └── etb_project/
 │       ├── __init__.py          # Package initialization
 │       └── main.py              # Main entry point
+├── tools/                       # Utilities and side projects (not installed)
+│   └── data_generation/         # Data generation scripts
 ├── tests/                       # Test suite
 ├── docs/                        # Documentation
-├── scripts/                     # Utility scripts
 └── .github/                     # GitHub workflows
 ```
+
+### Tools and utilities
+
+Code under `tools/` is **not** part of the installed package. Only `src/etb_project/` is packaged and installed. The `tools/` directory holds development and one-off utilities (e.g. data generation) that are run from the repo with `PYTHONPATH=. python -m tools.data_generation` or by executing scripts under `tools/` directly.
 
 ## Design Principles
 
