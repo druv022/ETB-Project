@@ -17,7 +17,7 @@ install: ## Install production dependencies
 	@echo "Installing production dependencies..."
 	$(PIP) install -r requirements.txt
 
-install-dev: ## Install development dependencies
+install-dev: ## Install development dependencies (includes pre-commit + pre-push hooks)
 	@echo "Installing development dependencies..."
 	$(PIP) install -r requirements-dev.txt
 	@if [ "y" = "y" ]; then \
@@ -40,7 +40,7 @@ test-watch: ## Run tests in watch mode
 lint: ## Run linters
 	@echo "Running linters..."
 	ruff check .
-	mypy etb_project
+	mypy src/etb_project
 
 format: ## Format code
 	@echo "Formatting code..."
@@ -49,7 +49,7 @@ format: ## Format code
 
 type-check: ## Run type checker
 	@echo "Running type checker..."
-	mypy etb_project
+	mypy src/etb_project
 
 clean: ## Clean build artifacts
 	@echo "Cleaning..."
@@ -80,4 +80,8 @@ docker-logs: ## View Docker logs
 pre-commit: ## Run pre-commit hooks on all files
 	@echo "Running pre-commit hooks..."
 	pre-commit run --all-files
+
+pre-push: ## Run pre-push checks (lint + format) without pushing
+	@echo "Running pre-push lint and format checks..."
+	ruff check . && black --check . && mypy src/etb_project
 

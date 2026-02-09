@@ -1,5 +1,7 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
+default_install_hook_types: [pre-commit, pre-push]
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
@@ -52,4 +54,13 @@ repos:
       - id: python-check-mock-methods
       - id: python-no-eval
       - id: python-use-type-annotations
+
+  # Pre-push: verify lint and format (same as CI) before allowing push
+  - repo: local
+    hooks:
+      - id: lint-and-format-check
+        name: Lint and format check (pre-push)
+        entry: bash -c 'ruff check . && black --check . && mypy src/etb_project'
+        language: system
+        stages: [pre-push]
 

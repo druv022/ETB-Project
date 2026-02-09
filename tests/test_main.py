@@ -8,10 +8,6 @@ from etb_project import __version__
 
 if TYPE_CHECKING:
     from _pytest.capture import CaptureFixture
-    from _pytest.fixtures import FixtureRequest
-    from _pytest.logging import LogCaptureFixture
-    from _pytest.monkeypatch import MonkeyPatch
-    from pytest_mock.plugin import MockerFixture
 
 
 def test_version() -> None:
@@ -32,8 +28,7 @@ def test_main_function_execution(capsys: "CaptureFixture[str]") -> None:
     from etb_project import main
 
     main()
-    captured = capsys.readouterr()
-    # Verify logging output (if any)
+    _ = capsys.readouterr()  # consume stdout/stderr
     assert main is not None
 
 
@@ -43,10 +38,9 @@ def test_main_function_import() -> None:
 
     # Verify function exists and is callable
     assert callable(main)
-    
+
     # Call function and verify no exceptions
     try:
         main()
     except Exception as e:
         pytest.fail(f"main() raised {e} unexpectedly")
-
