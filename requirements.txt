@@ -1,0 +1,5 @@
+# Production dependencies
+
+pydantic>=2.5
+
+

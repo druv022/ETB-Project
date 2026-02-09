@@ -1,0 +1,54 @@
+---
+description: This rule applies when writing or modifying code. Unit tests must be created for every function, class, and code path to maintain 100% code coverage and comprehensive edge case testing.
+alwaysApply: false
+---
+# Unit Testing Requirements
+
+**MANDATORY**: Every function, class method, and code path MUST have unit tests with **100% code coverage**.
+
+## Core Requirements
+
+- Create test file in `tests/` directory: `test_<module_name>.py`
+- Test all code paths: if/else branches, loops, exceptions, return statements
+- Test all edge cases: boundary values (0, 1, -1, empty, None, max), invalid inputs, error scenarios
+- Test error handling: all exception types, status codes, error messages
+- Verify coverage: `pytest tests/ -v --cov=app --cov-report=term-missing`
+- Coverage must be 100% before code is considered complete
+
+## Test Structure
+
+- Use `TestClient` from `fastapi.testclient` for API endpoints
+- Test naming: `test_<function_name>_<scenario>()`
+- Use AAA pattern: Arrange, Act, Assert
+- Add docstrings to all test functions
+- Use `@pytest.fixture` for reusable test data
+- Use `@pytest.mark.parametrize` for multiple input scenarios
+- Mock external dependencies (APIs, databases, file I/O)
+
+## Required Test Categories
+
+For every function/endpoint:
+1. **Success cases**: Valid inputs, correct outputs, proper status codes
+2. **Error cases**: Invalid inputs, 404/422/500 responses, validation errors
+3. **Edge cases**: Empty inputs, None values, boundary values, special characters
+4. **State testing**: Initial state, state transitions, invalid states
+
+## Coverage Verification
+
+Before code completion:
+- Run `pytest tests/ -v --cov=app --cov-report=term-missing`
+- Ensure 100% coverage for all new/modified code
+- Address ALL missing lines reported by coverage tool
+- Test all branches (if/else, try/except, loops)
+
+## Type Hints for Tests
+
+```python
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from _pytest.capture import CaptureFixture
+    from _pytest.fixtures import FixtureRequest
+    from _pytest.logging import LogCaptureFixture
+    from _pytest.monkeypatch import MonkeyPatch
+    from pytest_mock.plugin import MockerFixture
+```

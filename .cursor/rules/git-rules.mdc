@@ -1,0 +1,7 @@
+---
+alwaysApply: true
+---
+
+- Ensure there is a README.md file at the root of the project that contains instructions on how to execute the program   
+- Update the `README.md` file if needed every time the application itself is updated
+- Ensure you create a new Git branch every time you make edits to the code

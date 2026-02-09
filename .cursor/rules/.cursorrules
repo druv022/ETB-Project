@@ -1,0 +1,212 @@
+# Cursor IDE AI Coding Guidelines
+
+## Code Style and Quality
+
+### General Principles
+- Write clean, maintainable, and well-documented code
+- Follow PEP 8 style guide for Python
+- Use meaningful variable and function names
+- Keep functions small and focused (single responsibility principle)
+- Avoid deep nesting (max 3-4 levels)
+- Prefer composition over inheritance
+- Write self-documenting code with clear intent
+
+### Type Safety
+- Use type hints/annotations in all code
+- Use mypy for Python type checking with strict mode
+- Avoid using `Any` type when possible; use `Union` or specific types
+- Use `Protocol` for structural subtyping when appropriate
+
+### Error Handling
+- Always handle errors explicitly; never ignore exceptions
+- Use appropriate exception types and provide meaningful error messages
+- Log errors with sufficient context for debugging
+- Fail fast with clear error messages
+- Use context managers for resource management
+
+## Architecture Patterns
+
+### Project Structure
+- Follow Python project layout conventions (src layout)
+- Separate concerns: business logic, data access, presentation, configuration
+- Use dependency injection for testability
+- Implement proper separation of layers (controller, service, repository patterns where applicable)
+
+### Design Patterns
+- Prefer dependency injection over global state
+- Use factory patterns for object creation when appropriate
+- Implement repository pattern for data access
+- Use strategy pattern for algorithm variations
+- Apply observer pattern for event-driven architectures
+
+### Scalability
+- Design for horizontal scalability
+- Use async/await for I/O operations
+- Implement proper caching strategies
+- Consider database query optimization
+- Use connection pooling for database connections
+- Design stateless services when possible
+
+## Testing Requirements
+
+### Test Coverage
+- Aim for minimum 80% code coverage
+- Write unit tests for all business logic
+- Include integration tests for critical paths
+- Add end-to-end tests for user workflows
+- Test error cases and edge conditions
+
+### Test Quality
+- Use descriptive test names that explain what is being tested
+- Follow AAA pattern (Arrange, Act, Assert)
+- Keep tests independent and isolated
+- Use fixtures and factories for test data
+- Mock external dependencies (APIs, databases, file systems)
+- Test both positive and negative cases
+
+### Test Organization
+- Mirror source structure in test directory
+- Group related tests in test classes/modules
+- Use test doubles (mocks, stubs, fakes) appropriately
+- Keep test setup and teardown minimal
+
+## Documentation Standards
+
+### Code Documentation
+- Write docstrings for all public functions, classes, and modules (Google or NumPy style)
+- Document complex algorithms and business logic
+- Include parameter and return type descriptions
+- Add usage examples for public APIs
+- Keep comments up-to-date with code changes
+
+### API Documentation
+- Document all API endpoints with request/response examples
+- Include authentication requirements
+- Document error responses and status codes
+- Provide OpenAPI/Swagger specifications for REST APIs
+
+### Architecture Documentation
+- Maintain architecture decision records (ADRs)
+- Document system design and component interactions
+- Keep README files updated with setup and usage instructions
+- Document deployment procedures
+
+## Security Best Practices
+
+### Input Validation
+- Validate and sanitize all user inputs
+- Use parameterized queries to prevent SQL injection
+- Validate file uploads (type, size, content)
+- Implement rate limiting for APIs
+- Use CSRF protection for web applications
+
+### Authentication and Authorization
+- Use secure authentication mechanisms (OAuth 2.0, JWT)
+- Implement proper session management
+- Use strong password hashing (bcrypt, argon2)
+- Implement principle of least privilege
+- Validate permissions on every request
+
+### Secrets Management
+- Never commit secrets, API keys, or credentials to version control
+- Use environment variables or secret management services
+- Rotate secrets regularly
+- Use different secrets for different environments
+- Encrypt sensitive data at rest and in transit
+
+### Dependency Security
+- Regularly update dependencies to patch vulnerabilities
+- Use dependency scanning tools (Snyk, Dependabot, Safety)
+- Review and audit third-party packages
+- Pin dependency versions in production
+- Use lock files for reproducible builds
+
+## Performance Guidelines
+
+### Code Performance
+- Profile code before optimizing
+- Use appropriate data structures for the use case
+- Avoid premature optimization
+- Cache expensive computations
+- Use lazy loading where appropriate
+
+### Database Performance
+- Use database indexes appropriately
+- Avoid N+1 query problems
+- Use connection pooling
+- Implement pagination for large datasets
+- Use database transactions correctly
+
+### API Performance
+- Implement proper caching headers
+- Use compression (gzip, brotli)
+- Minimize payload sizes
+- Use pagination for list endpoints
+- Implement request/response compression
+
+## Git and Version Control
+
+### Commit Messages
+- Use clear, descriptive commit messages
+- Follow conventional commit format when applicable
+- Reference issue numbers in commits
+- Keep commits atomic and focused
+- Write commit messages in imperative mood
+
+### Branch Strategy
+- Use feature branches for new development
+- Keep branches up-to-date with main
+- Use descriptive branch names
+- Delete merged branches
+- Use pull requests for code review
+
+## Code Review Guidelines
+
+### Review Checklist
+- Code follows style guidelines (PEP 8, Black formatting)
+- Type hints are included
+- Tests are included and passing
+- Documentation is updated
+- No security vulnerabilities introduced
+- Performance considerations addressed
+- Error handling is appropriate
+- Code is maintainable and readable
+
+## Python-Specific Guidelines
+
+### Code Style
+- Use type hints for all function signatures
+- Follow PEP 8 style guide
+- Use Black for formatting (line length: 88)
+- Use Ruff for linting
+- Use f-strings for string formatting
+- Prefer pathlib over os.path
+- Use dataclasses or Pydantic models for data structures
+
+### Best Practices
+- Use async/await for I/O-bound operations
+- Use context managers for resource management
+- Prefer list/dict comprehensions over loops when readable
+- Use `typing` module for type annotations
+- Use `__init__.py` files to make packages
+- Follow import order: stdlib, third-party, local
+
+### Testing
+- Use pytest for testing
+- Use pytest fixtures for test setup
+- Use pytest.mark for test markers
+- Mock external dependencies with unittest.mock or pytest-mock
+- Use pytest-cov for coverage reporting
+
+## AI-Assisted Development
+
+### When Using AI Tools
+- Review all AI-generated code before committing
+- Ensure AI suggestions align with project architecture
+- Test AI-generated code thoroughly
+- Understand what the code does before using it
+- Refactor AI code to match project style
+- Add appropriate error handling to AI code
+- Verify security implications of AI suggestions
+- Ensure type hints are included in AI-generated code
+

@@ -1,0 +1,6 @@
+---
+alwaysApply: true
+---
+
+- Create a `PROMPTS.md` file at the root level of the project if it is not already created
+- Log each prompt given to the agent as a time-stamped entry in the `PROMPTS.md` file
