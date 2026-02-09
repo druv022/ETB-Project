@@ -61,6 +61,25 @@ python -m etb_project.main
 make run
 ```
 
+## Tools (not installed)
+
+Utility scripts and side projects live under `tools/` and are **not** part of the installed package. They are for development and one-off tasks only.
+
+### Data generation
+
+Data generation scripts are in `tools/data_generation/`. They are not installed with `pip install .`.
+
+**How to run:**
+
+1. From the project root, set `PYTHONPATH` so Python can find the `tools` package:
+   ```bash
+   PYTHONPATH=. python -m tools.data_generation
+   ```
+2. Or run a specific script inside the folder:
+   ```bash
+   python tools/data_generation/your_script.py
+   ```
+
 ## Development
 
 ### Setup
@@ -125,9 +144,12 @@ make docker-up
 ```
 etb_project/
 ├── src/
-│   └── etb_project/
+│   └── etb_project/           # Main package (installed with pip install .)
 │       ├── __init__.py
 │       └── main.py
+├── tools/                     # Utilities and side projects (not installed)
+│   └── data_generation/       # Data generation scripts
+│       └── __init__.py
 ├── tests/
 │   ├── __init__.py
 │   └── test_main.py
@@ -135,7 +157,6 @@ etb_project/
 │   ├── README.md
 │   ├── CONTRIBUTING.md
 │   └── ARCHITECTURE.md
-├── scripts/
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml

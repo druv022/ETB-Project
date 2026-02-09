@@ -29,6 +29,11 @@ pre-commit install
 
 ## Making Changes
 
+### Project layout
+
+- The installable application lives in `src/etb_project/`.
+- Utility scripts and side projects (e.g. data generation) live under `tools/` and are **not** installed with the package. Add such scripts under `tools/` (e.g. `tools/data_generation/`) and document how to run them in the README.
+
 ### Code Style
 
 - Follow PEP 8 style guidelines

@@ -93,9 +93,7 @@ jobs:
         run: bandit -r . -ll
       
       - name: Run Safety check
-        run: |
-          pip install safety
-          safety check --file requirements.txt
+        run: safety check --file requirements.txt
 
   build:
     name: Build
