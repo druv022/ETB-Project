@@ -11,5 +11,9 @@ This file logs all prompts given to the AI agent for this project.
 
 - **2025-02-08**: CI `ruff check .` failures (F401 unused imports, F841 unused variable, W293 whitespace) and Ruff deprecation warning for top-level lint options — fix tests and move config to `lint` section.
 
+- **2025-02-09**: Verify before pushing that lint and format checks are passed using GitHub prehooks — added pre-push git hook via pre-commit so Ruff, Black, and MyPy run before push (same as CI).
+
+- **2025-02-09**: Test if all precommit push works — ran pre-push checks (ruff, black --check, mypy); formatted 4 files with black; fixed mypy to use `src/etb_project` so it works without editable install (updated .pre-commit-config.yaml, Makefile, CI, README). All pre-push checks now pass.
+
 ---
 

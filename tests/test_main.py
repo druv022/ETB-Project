@@ -44,4 +44,3 @@ def test_main_function_import() -> None:
         main()
     except Exception as e:
         pytest.fail(f"main() raised {e} unexpectedly")
-

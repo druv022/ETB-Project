@@ -31,7 +31,7 @@ jobs:
         run: black --check .
       
       - name: Run MyPy
-        run: mypy etb_project
+        run: mypy src/etb_project
 
   test:
     name: Test
