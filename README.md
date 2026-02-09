@@ -87,8 +87,10 @@ Data generation scripts are in `tools/data_generation/`. They are not installed 
 1. Clone the repository
 2. Create a virtual environment
 3. Install development dependencies: `pip install -r requirements-dev.txt`
-4. Install pre-commit hooks: `pre-commit install`
+4. Install git hooks: `pre-commit install` (installs both pre-commit and pre-push hooks; or use `make install-dev`)
 5. Copy `.env.example` to `.env` and configure
+
+Pre-push hooks run the same lint and format checks as CI (Ruff, Black, MyPy) so that failed checks are caught before you push.
 
 ### Running Tests
 
@@ -114,15 +116,16 @@ black .
 ruff check --fix .
 
 # Type checking
-mypy etb_project
+mypy src/etb_project
 
 # Run all checks
 make lint
 make format
 make type-check
 
-# Or use pre-commit
+# Or use pre-commit (on commit) and pre-push (before push)
 pre-commit run --all-files
+make pre-push   # Run lint/format check without pushing
 ```
 
 ### Docker
