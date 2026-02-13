@@ -1,0 +1,3 @@
+Unit mismatches: 0
+Max absolute sales diff: 0.06
+Mean absolute sales diff: 0.01

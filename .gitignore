@@ -139,3 +139,7 @@ dmypy.json
 logs/
 *.log
 
+# Generated transaction data (can be regenerated using generate_final_v3.ps1)
+tools/data_generation/Transaction_data/transaction_database_5yrs_full.sql
+tools/data_generation/Transaction_data/transactions_JanFeb_2020.csv
+
