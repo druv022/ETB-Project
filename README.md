@@ -36,6 +36,9 @@ pip install -r requirements.txt
 
 # Install development dependencies
 pip install -r requirements-dev.txt
+
+# Install the local package so `python -m etb_project.main` and pytest imports work
+pip install -e .
 ```
 
 ### Using poetry
@@ -87,8 +90,9 @@ Data generation scripts are in `tools/data_generation/`. They are not installed 
 1. Clone the repository
 2. Create a virtual environment
 3. Install development dependencies: `pip install -r requirements-dev.txt`
-4. Install git hooks: `pre-commit install` (installs both pre-commit and pre-push hooks; or use `make install-dev`)
-5. Copy `.env.example` to `.env` and configure
+4. Install the package in editable mode: `pip install -e .`
+5. Install git hooks: `pre-commit install` (installs both pre-commit and pre-push hooks; or use `make install-dev`)
+6. Copy `.env.example` to `.env` and configure
 
 Pre-push hooks run the same lint and format checks as CI (Ruff, Black, MyPy) so that failed checks are caught before you push.
 

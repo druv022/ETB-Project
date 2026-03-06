@@ -25,7 +25,7 @@ def test_import() -> None:
 
 def test_main_function_execution(capsys: "CaptureFixture[str]") -> None:
     """Test that main function executes without errors."""
-    from etb_project import main
+    from etb_project.main import main
 
     main()
     _ = capsys.readouterr()  # consume stdout/stderr
