@@ -37,16 +37,12 @@ jobs:
           files: dist/*
           generate_release_notes: true
         env:
-          # Note: Using  to escape GitHub Actions syntax from cookiecutter templating
-          # This will render as ${{ secrets.GITHUB_TOKEN }} in the generated project
-          GITHUB_TOKEN: ${% raw %}{{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Publish to PyPI
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           TWINE_USERNAME: __token__
-          # Note: Using  to escape GitHub Actions syntax from cookiecutter templating
-          # This will render as ${{ secrets.PYPI_API_TOKEN }} in the generated project
-          TWINE_PASSWORD: ${% raw %}{{ secrets.PYPI_API_TOKEN }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: twine upload dist/*
 

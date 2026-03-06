@@ -15,5 +15,7 @@ This file logs all prompts given to the AI agent for this project.
 
 - **2025-02-09**: Test if all precommit push works — ran pre-push checks (ruff, black --check, mypy); formatted 4 files with black; fixed mypy to use `src/etb_project` so it works without editable install (updated .pre-commit-config.yaml, Makefile, CI, README). All pre-push checks now pass.
 
+- **2026-03-06**: Remove unnecessary checks and restriction for git cli that are failing — fixed CI/release workflows by replacing unrendered cookiecutter template syntax (`${% raw %}{{ ... }}`) with valid GitHub Actions expressions (`${{ ... }}`) so Test jobs run correctly on all matrix combinations.
+
 ---
 
