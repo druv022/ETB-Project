@@ -35,9 +35,7 @@ jobs:
 
   test:
     name: Test
-    # Note: Using  to escape GitHub Actions syntax from cookiecutter templating
-    # This will render as ${{ matrix.os }} in the generated project
-    runs-on: ${% raw %}{{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
@@ -47,9 +45,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Note: Using  to escape GitHub Actions syntax from cookiecutter templating
-      # This will render as ${{ matrix.python-version }} in the generated project
-      - name: Set up Python ${% raw %}{{ matrix.python-version }}
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}

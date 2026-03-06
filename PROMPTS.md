@@ -18,9 +18,12 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-02-12**: Help me resolve the error and push the changes to GitHub. What's the blocking point here — GitHub rejected push because transaction_database_5yrs_full.sql (176.14 MB) exceeds 100 MB limit. Need to use Git LFS or remove large file.
 
 - **2026-02-12**: Can you add the .csv file to the github, since it is small — Updated .gitignore to only exclude large SQL file, added transactions_JanFeb_2020.csv (3.6 MB) to repository, and updated README documentation.
+- **2026-03-06**: Remove unnecessary checks and restriction for git cli that are failing — fixed CI/release workflows by replacing unrendered cookiecutter template syntax (`${% raw %}{{ ... }}`) with valid GitHub Actions expressions (`${{ ... }}`) so Test jobs run correctly on all matrix combinations.
 
 ---
 
 - **2026-03-06**: Fix error @git-error-1772822737375 — Updated Bandit pre-commit hook with `pass_filenames: false` so pre-commit no longer passes individual file paths as CLI arguments, resolving the `unrecognized arguments` error.
 
 - **2026-03-06**: Fix error @git-error-1772822811075 — Corrected YAML indentation for the Bandit hook in `.pre-commit-config.yaml` so `args`, `exclude`, and `pass_filenames` are properly nested under the `bandit` hook entry and the config parses successfully.
+
+- **2026-03-06 14:24:03 EST**: Resolve this merge conflict @Branch — resolved the outstanding Git merge conflict in `PROMPTS.md` by preserving both prompt-history lines and re-staging the prompt log.
