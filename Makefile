@@ -84,4 +84,3 @@ pre-commit: ## Run pre-commit hooks on all files
 pre-push: ## Run pre-push checks (lint + format) without pushing
 	@echo "Running pre-push lint and format checks..."
 	ruff check . && black --check . && mypy src/etb_project
-

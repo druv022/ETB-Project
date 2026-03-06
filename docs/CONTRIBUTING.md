@@ -126,4 +126,3 @@ For feature requests, please:
 Feel free to open an issue for questions or reach out to the maintainers.
 
 Thank you for contributing!
-

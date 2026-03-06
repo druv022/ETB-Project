@@ -21,3 +21,6 @@ This file logs all prompts given to the AI agent for this project.
 
 ---
 
+- **2026-03-06**: Fix error @git-error-1772822737375 — Updated Bandit pre-commit hook with `pass_filenames: false` so pre-commit no longer passes individual file paths as CLI arguments, resolving the `unrecognized arguments` error.
+
+- **2026-03-06**: Fix error @git-error-1772822811075 — Corrected YAML indentation for the Bandit hook in `.pre-commit-config.yaml` so `args`, `exclude`, and `pass_filenames` are properly nested under the `bandit` hook entry and the config parses successfully.

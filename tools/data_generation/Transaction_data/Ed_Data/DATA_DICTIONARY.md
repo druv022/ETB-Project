@@ -7,7 +7,7 @@
 
 This database contains **12,000 sales records** for **200 products** across **60 months** (January 2020 - December 2024), simulating realistic retail sales data for a Walmart-style store.
 
-**Total Revenue (5 years):** $13,043,794.86  
+**Total Revenue (5 years):** $13,043,794.86
 **Average Monthly Revenue:** $217,396.58
 
 ---
@@ -303,11 +303,11 @@ This database is ideal for:
 
 ## Data Quality Notes
 
-✓ **Complete data:** No missing values  
-✓ **Realistic patterns:** Includes seasonality and trends  
-✓ **Price consistency:** Larger presentations = higher prices  
-✓ **Brand diversity:** 75 unique brands across 200 products  
-✓ **Time coverage:** Full 5 years of monthly data  
+✓ **Complete data:** No missing values
+✓ **Realistic patterns:** Includes seasonality and trends
+✓ **Price consistency:** Larger presentations = higher prices
+✓ **Brand diversity:** 75 unique brands across 200 products
+✓ **Time coverage:** Full 5 years of monthly data
 ✓ **Realistic zeros:** Some months show zero sales (5% of records)
 
 ---
@@ -338,7 +338,7 @@ GROUP BY Year, Month
 ORDER BY Year, Month;
 
 -- Category performance comparison
-SELECT Category, 
+SELECT Category,
        SUM(Total_Sales_Value) as Total_Revenue,
        SUM(Units_Sold) as Total_Units,
        AVG(Unit_Price) as Avg_Price
@@ -351,18 +351,18 @@ ORDER BY Total_Revenue DESC;
 
 ## Version Information
 
-**Database Version:** 2.0  
-**Creation Date:** January 2026  
-**Data Period:** January 2020 - December 2024  
-**Total Records:** 12,000  
-**Total Products:** 200  
+**Database Version:** 2.0
+**Creation Date:** January 2026
+**Data Period:** January 2020 - December 2024
+**Total Records:** 12,000
+**Total Products:** 200
 **Total Columns:** 15
 **File Size:** 3.80 MB
 
 **Version 2.0 Updates:**
 - Added Pack_Quantity field
 - Added Product_Description field
-- Added Ingredients_List field  
+- Added Ingredients_List field
 
 ---
 

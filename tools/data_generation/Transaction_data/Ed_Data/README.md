@@ -29,7 +29,7 @@
 
 **Each record contains:**
 ```
-Product_ID, SKU, Category, Brand, Sub_Brand, Product_Name, 
+Product_ID, SKU, Category, Brand, Sub_Brand, Product_Name,
 Presentation, Pack_Quantity, Product_Description, Ingredients_List,
 Unit_Price, Year, Month, Units_Sold, Total_Sales_Value
 ```
@@ -114,7 +114,7 @@ print(category_stats)
 -- Load into your database, then:
 
 -- Monthly sales trend
-SELECT Year, Month, 
+SELECT Year, Month,
        SUM(Total_Sales_Value) as Revenue,
        SUM(Units_Sold) as Units
 FROM walmart_retail_sales_database
@@ -228,14 +228,14 @@ ORDER BY Month;
 
 ## 📋 Data Quality Checklist
 
-✅ No missing values (100% complete)  
-✅ Unique Product_IDs and SKUs  
-✅ Consistent pricing across time  
-✅ Realistic sales patterns  
-✅ Proper date ranges (60 months)  
-✅ Accurate calculations (Units × Price = Total)  
-✅ Representative brand mix  
-✅ Logical category distribution  
+✅ No missing values (100% complete)
+✅ Unique Product_IDs and SKUs
+✅ Consistent pricing across time
+✅ Realistic sales patterns
+✅ Proper date ranges (60 months)
+✅ Accurate calculations (Units × Price = Total)
+✅ Representative brand mix
+✅ Logical category distribution
 
 ---
 
@@ -269,13 +269,13 @@ ORDER BY Month;
 
 ## 🔄 Data Versioning
 
-**Version:** 2.0  
-**Created:** January 2026  
-**Coverage:** January 2020 - December 2024  
-**Records:** 12,000  
-**Products:** 200  
-**Categories:** 6  
-**Brands:** 75  
+**Version:** 2.0
+**Created:** January 2026
+**Coverage:** January 2020 - December 2024
+**Records:** 12,000
+**Products:** 200
+**Categories:** 6
+**Brands:** 75
 **Columns:** 15
 **File Size:** 3.80 MB
 

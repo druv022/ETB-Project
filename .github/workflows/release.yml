@@ -13,24 +13,24 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
-      
+
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
           pip install build twine
-      
+
       - name: Build package
         run: python -m build
-      
+
       - name: Check package
         run: twine check dist/*
-      
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
@@ -40,7 +40,7 @@ jobs:
           # Note: Using  to escape GitHub Actions syntax from cookiecutter templating
           # This will render as ${{ secrets.GITHUB_TOKEN }} in the generated project
           GITHUB_TOKEN: ${% raw %}{{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Publish to PyPI
         if: startsWith(github.ref, 'refs/tags/v')
         env:
@@ -49,4 +49,3 @@ jobs:
           # This will render as ${{ secrets.PYPI_API_TOKEN }} in the generated project
           TWINE_PASSWORD: ${% raw %}{{ secrets.PYPI_API_TOKEN }}
         run: twine upload dist/*
-
