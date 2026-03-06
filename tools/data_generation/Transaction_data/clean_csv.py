@@ -4,7 +4,7 @@ import sys
 file_path = r'e:\Purdue MBT\Academics\Spring_2026_classes\59000_Emerging_Tech_and Business\AI_Tech_Project\Synthetic_Retail_data\transaction_database_2020_JanFeb.csv'
 
 # Read the file
-with open(file_path, 'r', encoding='utf-8') as f:
+with open(file_path, encoding='utf-8') as f:
     content = f.read()
 
 # Remove all [string] prefixes
