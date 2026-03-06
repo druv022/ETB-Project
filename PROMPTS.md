@@ -32,3 +32,5 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-03-06 14:24:03 EST**: Resolve this merge conflict @Branch — resolved the outstanding Git merge conflict in `PROMPTS.md` by preserving both prompt-history lines and re-staging the prompt log.
 
 - **2026-03-06**: Fix such this error doesn't happen in the github cli server after pushing to origin — updated GitHub Actions CI to install the local package with `pip install -e .` before linting and tests so the `src`-layout package `etb_project` can be imported on the runner; also clarified local setup in `README.md`.
+
+- **2026-03-06 14:53:17 EST**: fix GitHub detected a deprecated action version — upgraded `.github/workflows/ci.yml` from `actions/upload-artifact@v3` to `actions/upload-artifact@v4` to resolve the GitHub Actions deprecation failure during artifact upload setup.
