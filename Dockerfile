@@ -31,4 +31,3 @@ EXPOSE 8000
 
 # Default command
 CMD ["python", "-m", "etb_project.main"]
-

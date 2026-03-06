@@ -17,8 +17,5 @@ services:
     ports:
       - "8000:8000"
     command: python -m etb_project.main
-    
+
     restart: unless-stopped
-
-  
-

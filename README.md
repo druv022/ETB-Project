@@ -202,4 +202,3 @@ This project is licensed under the Apache-2.0 License - see the LICENSE file for
 
 - Built with [Cookiecutter](https://github.com/cookiecutter/cookiecutter)
 - Optimized for [Cursor IDE](https://cursor.sh/)
-
