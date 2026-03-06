@@ -54,59 +54,59 @@ foreach ($group in $monthGroups) {
     $nameparts = $group.Name -split ','
     $year = [int]($nameparts[0].Trim())
     $month = [int]($nameparts[1].Trim())
-    
+
     if ($month -in @(1, 6, 12)) { Write-Host "  $year-$($month.ToString('D2'))..." }
-    
+
     foreach ($row in $group.Group) {
         $prodId = [int]$row.Product_ID
         $unitsCount = [int]$row.Units_Sold
-        
+
         if (-not $productMap.ContainsKey($prodId) -or $unitsCount -le 0) { continue }
-        
+
         $pInfo = $productMap[$prodId]
         $unitPrice = $pInfo.UnitPrice
         $sku = $pInfo.SKU
         $taxRate = $categories[$pInfo.Category]
-        
+
         $remaining = $unitsCount
         while ($remaining -gt 0) {
-            $qty = if ($rand.NextDouble() -lt 0.85) { 
-                [math]::Min($rand.Next(1, 6), $remaining) 
-            } else { 
-                [math]::Min($rand.Next(6, 13), $remaining) 
+            $qty = if ($rand.NextDouble() -lt 0.85) {
+                [math]::Min($rand.Next(1, 6), $remaining)
+            } else {
+                [math]::Min($rand.Next(6, 13), $remaining)
             }
-            
+
             $discountPct = if ($rand.NextDouble() -lt 0.60) { 0 } else { $rand.Next(5, 31) }
             $storeId = $rand.Next(1, 101)
-            
+
             $gross = [math]::Round($qty * $unitPrice, 2)
             $discountAmt = [math]::Round($gross * ($discountPct / 100), 2)
             $net = [math]::Round($gross - $discountAmt, 2)
             $taxAmt = [math]::Round($net * $taxRate, 2)
             $total = [math]::Round($net + $taxAmt, 2)
-            
+
             # Transaction ID
             if (-not $txnCounterYear.ContainsKey($year)) { $txnCounterYear[$year] = 0 }
             $txnCounterYear[$year]++
             $txnId = "TXN{0:D2}{1:D3}{2:D6}" -f ($year % 100), $storeId, $txnCounterYear[$year]
-            
+
             # Random date in month
             $maxDay = if ($month -eq 2) { if ([math]::DivRem($year, 4, [ref]$null) -eq 0) { 29 } else { 28 } } else { 28 }
             $dayOfMonth = $rand.Next(1, $maxDay + 1)
             $hourOfDay = $rand.Next(8, 22)
             $minute = $rand.Next(0, 60)
             $second = $rand.Next(0, 60)
-            
+
             $dt = Get-Date -Year $year -Month $month -Day $dayOfMonth -Hour $hourOfDay -Minute $minute -Second $second
             $dateStr = $dt.ToString("yyyy-MM-dd")
             $timeStr = $dt.ToString("HH:mm:ss")
-            
+
             $region = $storeRegions[$storeId - 1]
             $channel = @("InStore", "Online", "Pickup")[$rand.Next(3)]
             $custId = $rand.Next(1, 85001)
             $custType = @("New customer", "Existing regular", "Plus member")[$rand.Next(3)]
             $payment = @("Credit Card", "Debit Card", "Cash", "Gift Card")[$rand.Next(4)]
-            
+
             # Collect CSV line if Jan-Feb 2020
             if ($year -eq 2020 -and $month -le 2) {
                 $csvLine = "$lineId,$txnId,$dateStr,$timeStr,$storeId,$region,$channel,$custId,$custType,$prodId,$sku,$qty," + `
@@ -119,7 +119,7 @@ foreach ($group in $monthGroups) {
                            [string]::Format("{0:0.00}", $total) + ",$payment"
                 $csvLines += $csvLine
             }
-            
+
             # Collect SQL line
             $sqlLine = "INSERT INTO `"transactions`" VALUES ($lineId,'$txnId','$dateStr','$timeStr',$storeId,'$region','$channel',$custId,'$custType',$prodId,'$sku',$qty," + `
                        [string]::Format("{0:0.00}", $unitPrice) + "," + `
@@ -130,10 +130,10 @@ foreach ($group in $monthGroups) {
                        [string]::Format("{0:0.00}", $taxAmt) + "," + `
                        [string]::Format("{0:0.00}", $total) + ",'$payment');"
             $sqlLines += $sqlLine
-            
+
             $lineId++
             $processed++
-            
+
             # Write in batches
             if ($processed % $batchSize -eq 0) {
                 if ($csvLines.Count -gt 0) {
@@ -146,7 +146,7 @@ foreach ($group in $monthGroups) {
                 }
                 Write-Host "  Processed $processed transactions..."
             }
-            
+
             $remaining -= $qty
         }
     }

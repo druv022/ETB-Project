@@ -4,7 +4,7 @@ default_install_hook_types: [pre-commit, pre-push]
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -19,33 +19,33 @@ repos:
       - id: check-docstring-first
 
   - repo: https://github.com/psf/black
-    rev: 23.12.1
+    rev: 26.3.0
     hooks:
       - id: black
         language_version: python3
         args: [--line-length=88]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.1.6
+    rev: v0.15.5
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
       - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.7.1
+    rev: v1.19.1
     hooks:
       - id: mypy
-        additional_dependencies: [types-all]
         args: [--ignore-missing-imports]
         exclude: ^tests/
 
   - repo: https://github.com/PyCQA/bandit
-    rev: 1.7.5
+    rev: 1.9.4
     hooks:
       - id: bandit
         args: [-r, ., -ll]
         exclude: ^tests/
+        pass_filenames: false
 
   - repo: https://github.com/pre-commit/pygrep-hooks
     rev: v1.10.0
@@ -63,4 +63,3 @@ repos:
         entry: bash -c 'ruff check . && black --check . && mypy src/etb_project'
         language: system
         stages: [pre-push]
-

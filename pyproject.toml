@@ -23,9 +23,9 @@ classifiers = [
 ]
 
 dependencies = [
-    
+
     "pydantic>=2.5",
-    
+
 ]
 
 [project.optional-dependencies]
@@ -150,4 +150,3 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "@abstractmethod",
 ]
-
