@@ -1,0 +1,10 @@
+# Application settings (CLI flags override these when provided)
+pdf: null
+folder: null
+query: ""
+
+# Retriever
+retriever_k: 10
+
+# Optional: logging level
+log_level: "INFO"
