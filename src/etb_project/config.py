@@ -2,9 +2,9 @@
 
 import os
 from pathlib import Path
-from typing import cast
 
-import yaml  # type: ignore[import-untyped]
+# PyYAML has no stubs in some envs (CI, pre-commit); types-PyYAML in requirements.txt when available
+import yaml  # type: ignore[import-untyped,import-not-found]
 from pydantic import BaseModel, Field
 
 
@@ -46,5 +46,4 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
         return AppConfig()
     with open(path) as f:
         data = yaml.safe_load(f)
-    validated = AppConfig.model_validate(data if isinstance(data, dict) else {})
-    return cast(AppConfig, validated)
+    return AppConfig.model_validate(data if isinstance(data, dict) else {})

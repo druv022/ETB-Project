@@ -133,14 +133,14 @@ ruff check --fix .
 # Type checking
 mypy src/etb_project
 
-# Run all checks
+# Run all checks (lint = ruff + black --check + mypy; same as pre-push and CI)
 make lint
 make format
 make type-check
 
-# Or use pre-commit (on commit) and pre-push (before push)
-pre-commit run --all-files
-make pre-push   # Run lint/format check without pushing
+# Commit and push use the same checks as CI
+pre-commit run --all-files   # commit hooks (including mypy src/etb_project)
+make pre-push                # push checks without pushing
 ```
 
 ### Docker

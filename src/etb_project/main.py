@@ -6,6 +6,7 @@ from typing import Any
 
 from langchain.agents import create_agent
 from langchain.agents.middleware import AgentMiddleware, AgentState
+from langchain.agents.middleware.types import Runtime
 from langchain_core.messages import AIMessage, HumanMessage
 
 from etb_project.config import load_config
@@ -27,7 +28,9 @@ class State(AgentState):
 class RetrieveDocumentsMiddleware(AgentMiddleware[State]):
     state_schema = State
 
-    def before_model(self, state: State) -> dict[str, Any] | None:
+    def before_model(
+        self, state: State, runtime: Runtime[None]
+    ) -> dict[str, Any] | None:
         messages = state.get("messages") or []
         if messages:
             last_message = messages[-1]

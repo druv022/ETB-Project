@@ -1,5 +1,4 @@
 import pprint
-from typing import cast
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_core.documents import Document
@@ -7,7 +6,7 @@ from langchain_core.documents import Document
 
 def load_pdf(file_path: str) -> list[Document]:
     loader = PyPDFLoader(file_path, mode="page", extract_images=True)
-    return cast(list[Document], loader.load())
+    return loader.load()  # type: ignore[no-any-return]
 
 
 if __name__ == "__main__":

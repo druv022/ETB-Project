@@ -1,6 +1,5 @@
 import pprint
 from pathlib import Path
-from typing import cast
 
 import faiss
 from langchain_community.docstore.in_memory import InMemoryDocstore
@@ -23,17 +22,18 @@ def split_documents(documents: list[Document]) -> list[Document]:
         keep_separator=True,
         strip_whitespace=True,
     )
-    return cast(list[Document], text_splitter.split_documents(documents))
+    return text_splitter.split_documents(documents)  # type: ignore[no-any-return]
 
 
 def embed_documents(documents: list[Document]) -> list[list[float]]:
     embeddings = get_embedding_model()
-    return cast(list[list[float]], embeddings.embed_documents(documents))
+    texts = [doc.page_content for doc in documents]
+    return embeddings.embed_documents(texts)  # type: ignore[no-any-return]
 
 
 def embed_query(query: str) -> list[float]:
     embeddings = get_embedding_model()
-    return cast(list[float], embeddings.embed_query(query))
+    return embeddings.embed_query(query)  # type: ignore[no-any-return]
 
 
 def store_documents(documents: list[Document], embeddings: Embeddings) -> FAISS:
