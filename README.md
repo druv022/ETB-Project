@@ -198,7 +198,7 @@ etb_project/
 
 ### RAG application (settings.yaml)
 
-The main app reads configuration from **`src/config/settings.yaml`** (relative to the project root when you run `python -m etb_project.main`). You can override the config file path with the **`ETB_CONFIG`** environment variable (absolute path to another YAML file).
+The main app reads configuration from **`src/config/settings.yaml`**. It looks for this file relative to the current working directory first, then relative to the package location (so it works when run from project root or from inside `src/`). You can override the config file path with the **`ETB_CONFIG`** environment variable (absolute path to another YAML file).
 
 | Key           | Description                          | Default   |
 |---------------|--------------------------------------|-----------|

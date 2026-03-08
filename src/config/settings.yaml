@@ -1,5 +1,5 @@
 # Application settings (CLI flags override these when provided)
-pdf: null
+pdf: "/Users/dhrubapujary/z_EDUCATION/MBT/Mod 3/Emerging Tech/Project/ETB-Project/data/Introduction to Agents.pdf"
 folder: null
 query: ""
 
