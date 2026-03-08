@@ -9,14 +9,22 @@ ETB-project is built with a modular, scalable architecture following Python best
 ```
 etb_project/
 ├── src/
+│   ├── config/
+│   │   └── settings.yaml        # Default config file (pdf, query, retriever_k, log_level)
 │   └── etb_project/
-│       ├── __init__.py          # Package initialization
-│       └── main.py              # Main entry point
+│       ├── __init__.py
+│       ├── config.py            # AppConfig, load_config (reads settings.yaml or ETB_CONFIG)
+│       ├── main.py              # Entry point: load PDF, build retriever, query or interactive loop
+│       ├── models.py            # LLM and embedding helpers (Ollama, OpenAI)
+│       └── retrieval/
+│           ├── __init__.py      # Re-exports load_pdf, process_documents, split_documents, store_documents
+│           ├── loader.py        # load_pdf (PyPDFLoader)
+│           └── process.py       # split_documents, store_documents, process_documents (FAISS)
 ├── tools/                       # Utilities and side projects (not installed)
-│   └── data_generation/         # Data generation scripts
-├── tests/                       # Test suite
-├── docs/                        # Documentation
-└── .github/                     # GitHub workflows
+│   └── data_generation/
+├── tests/                       # test_config, test_main, test_retrieval_process
+├── docs/
+└── .github/
 ```
 
 ### Tools and utilities
@@ -51,10 +59,26 @@ Code under `tools/` is **not** part of the installed package. Only `src/etb_proj
 
 The main application entry point is in `src/etb_project/main.py`. This module:
 
-- Initializes the application
-- Configures logging
-- Sets up error handling
-- Starts the main application loop
+- Loads configuration from `src/config/settings.yaml` (or `ETB_CONFIG` path)
+- Sets log level from config
+- Loads the configured PDF, builds a FAISS vector store, and creates a retriever
+- Runs a single query if `config.query` is set, otherwise enters an interactive query loop
+
+### RAG pipeline
+
+```mermaid
+flowchart LR
+  Config[Config] --> Main[main]
+  Main --> LoadPDF[load_pdf]
+  LoadPDF --> Process[process_documents]
+  Process --> Retriever[retriever]
+  Retriever --> Query[query]
+```
+
+- **Config** (`etb_project.config`): `AppConfig` holds `pdf`, `query`, `retriever_k`, `log_level`. Loaded from YAML or `ETB_CONFIG`.
+- **load_pdf** (`etb_project.retrieval.loader`): Loads PDF pages (and optional image extraction) into LangChain `Document` list.
+- **process_documents** (`etb_project.retrieval.process`): Splits documents with `RecursiveCharacterTextSplitter`, embeds with Ollama, stores in FAISS.
+- **retriever**: FAISS vector store exposed as a retriever; `main` runs one query or an interactive CLI loop.
 
 ### Configuration Management
 

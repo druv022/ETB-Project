@@ -56,13 +56,18 @@ poetry shell
 
 ## Usage
 
+Configure a PDF path and optional query (see [Configuration](#configuration)), then run:
+
 ```bash
-# Run the application
+# From project root (with package installed: pip install -e .)
 python -m etb_project.main
 
 # Or using make
 make run
 ```
+
+- If `query` is set in config, the app runs that single query and logs the retrieval results.
+- If `query` is empty, the app enters an **interactive loop**: type a question and press Enter to see retrieved chunks; empty line or Ctrl+C to exit.
 
 ## Tools (not installed)
 
@@ -98,9 +103,15 @@ Pre-push hooks run the same lint and format checks as CI (Ruff, Black, MyPy) so 
 
 ### Running Tests
 
+From project root, with the package on the path (e.g. `pip install -e .` or `PYTHONPATH=src`):
+
 ```bash
 # Run all tests
 pytest
+
+# With conda env (e.g. etb) without installing the package
+conda activate etb
+PYTHONPATH=src pytest
 
 # Run with coverage
 pytest --cov=etb_project --cov-report=html
@@ -151,25 +162,29 @@ make docker-up
 ```
 etb_project/
 ├── src/
+│   ├── config/                # settings.yaml (and optional config module)
+│   │   ├── config.py
+│   │   └── settings.yaml
 │   └── etb_project/           # Main package (installed with pip install .)
 │       ├── __init__.py
-│       └── main.py
+│       ├── config.py          # AppConfig and load_config (reads settings.yaml / ETB_CONFIG)
+│       ├── main.py            # Entry point: load PDF, build retriever, query or interactive loop
+│       ├── models.py          # LLM and embedding helpers (Ollama, OpenAI)
+│       └── retrieval/
+│           ├── __init__.py    # Re-exports load_pdf, process_documents, split_documents, store_documents
+│           ├── loader.py     # load_pdf (PyPDFLoader)
+│           └── process.py    # split_documents, store_documents, process_documents, FAISS
 ├── tools/                     # Utilities and side projects (not installed)
-│   └── data_generation/       # Data generation scripts
-│       └── __init__.py
+│   └── data_generation/
 ├── tests/
-│   ├── __init__.py
-│   └── test_main.py
+│   ├── test_config.py
+│   ├── test_main.py
+│   └── test_retrieval_process.py
 ├── docs/
 │   ├── README.md
 │   ├── CONTRIBUTING.md
 │   └── ARCHITECTURE.md
-├── .github/
-│   └── workflows/
-│       ├── ci.yml
-│       └── release.yml
-├── .cursorrules
-├── .pre-commit-config.yaml
+├── .github/workflows/
 ├── pyproject.toml
 ├── requirements.txt
 ├── requirements-dev.txt
@@ -181,7 +196,31 @@ etb_project/
 
 ## Configuration
 
-Copy `.env.example` to `.env` and configure your environment variables:
+### RAG application (settings.yaml)
+
+The main app reads configuration from **`src/config/settings.yaml`** (relative to the project root when you run `python -m etb_project.main`). You can override the config file path with the **`ETB_CONFIG`** environment variable (absolute path to another YAML file).
+
+| Key           | Description                          | Default   |
+|---------------|--------------------------------------|-----------|
+| `pdf`         | Path to the PDF to index and query   | `null`    |
+| `query`       | Single query to run (optional)       | `""`      |
+| `retriever_k` | Number of chunks to retrieve per query (1–100) | `10` |
+| `log_level`   | Logging level: DEBUG, INFO, WARNING, ERROR | `INFO` |
+
+Example `src/config/settings.yaml`:
+
+```yaml
+pdf: data/your-document.pdf
+query: ""   # leave empty for interactive mode
+retriever_k: 10
+log_level: INFO
+```
+
+**Required:** Set `pdf` to a path that exists (relative to the current working directory or absolute). The app exits with an error if `pdf` is missing or the file is not found.
+
+### Environment variables
+
+Copy `.env.example` to `.env` for other app settings:
 
 ```bash
 cp .env.example .env

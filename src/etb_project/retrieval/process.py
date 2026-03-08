@@ -1,4 +1,5 @@
 import pprint
+from pathlib import Path
 from typing import cast
 
 import faiss
@@ -56,9 +57,15 @@ def process_documents(documents: list[Document]) -> FAISS:
 
 
 if __name__ == "__main__":
-    file_path = "/Users/dhrubapujary/z_EDUCATION/MBT/Mod 3/Emerging Tech/Project/ETB-Project/data/Introduction to Agents.pdf"
+    from etb_project.config import load_config
+
+    cfg = load_config()
+    file_path = cfg.pdf or "data/Introduction to Agents.pdf"
+    if not file_path or not Path(file_path).exists():
+        raise SystemExit("Set pdf path in settings.yaml or ETB_CONFIG YAML.")
     docs = load_pdf(file_path)
     vectorstore = process_documents(docs)
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 10})
-    results = retriever.invoke("What is an agent?")
+    retriever = vectorstore.as_retriever(search_kwargs={"k": cfg.retriever_k})
+    query = cfg.query or "What is an agent?"
+    results = retriever.invoke(query)
     pprint.pprint(results)
