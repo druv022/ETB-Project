@@ -67,7 +67,7 @@ make run
 ```
 
 - If `query` is set in config, the app runs that single query and logs the retrieval results.
-- If `query` is empty, the app enters an **interactive loop**: type a question and press Enter to see retrieved chunks; empty line or Ctrl+C to exit.
+- If `query` is empty, the app enters an **interactive loop**: each question is passed through a LangGraph-based RAG graph (`ingest_query → retrieve_rag → generate_answer`) and the LLM's answer (grounded in the PDF where possible) is printed; empty line or Ctrl+C to exit.
 
 ## Tools (not installed)
 
@@ -168,8 +168,9 @@ etb_project/
 │   └── etb_project/           # Main package (installed with pip install .)
 │       ├── __init__.py
 │       ├── config.py          # AppConfig and load_config (reads settings.yaml / ETB_CONFIG)
-│       ├── main.py            # Entry point: load PDF, build retriever, query or interactive loop
+│       ├── main.py            # Entry point: load PDF, build retriever, run single-query mode or LangGraph-based interactive loop
 │       ├── models.py          # LLM and embedding helpers (Ollama, OpenAI)
+│       ├── graph_rag.py       # LangGraph RAG graph (ingest_query → retrieve_rag → generate_answer, designed for future nodes)
 │       └── retrieval/
 │           ├── __init__.py    # Re-exports load_pdf, process_documents, split_documents, store_documents
 │           ├── loader.py     # load_pdf (PyPDFLoader)

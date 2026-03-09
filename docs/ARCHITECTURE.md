@@ -70,15 +70,18 @@ The main application entry point is in `src/etb_project/main.py`. This module:
 flowchart LR
   Config[Config] --> Main[main]
   Main --> LoadPDF[load_pdf]
-  LoadPDF --> Process[process_documents]
-  Process --> Retriever[retriever]
-  Retriever --> Query[query]
+  LoadPDF --> ProcessDocs[process_documents]
+  ProcessDocs --> Retriever[faiss_retriever]
+  Main --> LangGraphRAG["LangGraph RAG graph"]
+  Retriever --> LangGraphRAG
+  LangGraphRAG --> LLMAnswer["LLM answer"]
 ```
 
 - **Config** (`etb_project.config`): `AppConfig` holds `pdf`, `query`, `retriever_k`, `log_level`. Loaded from YAML or `ETB_CONFIG`.
 - **load_pdf** (`etb_project.retrieval.loader`): Loads PDF pages (and optional image extraction) into LangChain `Document` list.
 - **process_documents** (`etb_project.retrieval.process`): Splits documents with `RecursiveCharacterTextSplitter`, embeds with Ollama, stores in FAISS.
-- **retriever**: FAISS vector store exposed as a retriever; `main` runs one query or an interactive CLI loop.
+- **retriever**: FAISS vector store exposed as a retriever.
+- **LangGraph RAG graph** (`etb_project.graph_rag`): Orchestrates `ingest_query → retrieve_rag → generate_answer`, calling the LLM with retrieved context to produce the final answer in interactive mode.
 
 ### Configuration Management
 

@@ -10,3 +10,4 @@ langchain-ollama>=0.3.0
 langchain-openai>=0.3.0
 faiss-cpu>=1.7.4
 unstructured>=0.13.0
+langgraph>=0.2.0
