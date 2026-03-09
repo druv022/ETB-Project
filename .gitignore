@@ -144,3 +144,6 @@ tools/data_generation/Transaction_data/transaction_database_5yrs_full.sql
 
 framework/*
 data/Introduction to Agents.pdf
+tools/data_generation/Transaction_data/reconciliation_report.csv
+tools/data_generation/Transaction_data/reconciliation_summary_full.txt
+tools/data_generation/Transaction_data/transactions_JanFeb_2020.csv

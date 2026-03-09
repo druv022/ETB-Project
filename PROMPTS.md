@@ -40,3 +40,7 @@ This file logs all prompts given to the AI agent for this project.
 
 - **2026-03-08**: LangGraph Migration Plan — Implementing an extensible LangGraph-based RAG pipeline (ingest_query → retrieve_rag → generate_answer) with future support for query rewriting, parallel retrieval, SQL tools, reasoning, and response shaping, and updating tests/docs accordingly.
 - **2026-03-08**: Fix mypy pre-commit failure by adding an explicit `-> Any` return type annotation to `build_rag_graph` in `graph_rag.py` on the `feature/langgraph-migration` branch so the mypy hook passes.
+
+- **2026-03-09 00:00:00**: Implement retail reporting suite using Seaborn/Matplotlib and PDF generation under `tools/data_generation/report_generation`, with separate scripts for 8 report categories and multiple time granularities.
+
+- **2026-03-09**: Fix pre-commit failures @git-error-1773071198447 by resolving Ruff loop-variable and `zip` strictness warnings in `financial_margin_report.py`, suppressing Bandit B608 for the generated SQL in `generate_final_v3.py`, and ensuring mypy is happy with the `yaml` import in `src/etb_project/config.py`.
