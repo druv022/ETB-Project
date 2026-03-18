@@ -174,6 +174,16 @@ class BaseReport:
         )
 
         filler_words = filler_paragraph.split()
-        repeats = max(1, deficit // max(1, len(filler_words)))
+        filler_len = len(filler_words)
+        if filler_len == 0:
+            # Degenerate case: nothing to append.
+            return text
+
+        # Use ceiling division so we never return text shorter than `target_words`.
+        repeats = (deficit + filler_len - 1) // filler_len
+        repeats = max(1, repeats)
         extended = text + "\n\n" + " ".join(filler_paragraph for _ in range(repeats))
+        # Defensive: ensure we meet the lower-bound expectation.
+        if len(extended.split()) < target_words:
+            return extended + "\n\n" + filler_paragraph
         return extended

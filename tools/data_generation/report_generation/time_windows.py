@@ -21,6 +21,32 @@ class Period:
     end: date
 
 
+def get_periods_for_granularity(
+    granularity: str, start: date, end: date
+) -> list[Period]:
+    """
+    Return a list of Period objects for the given granularity between start and end.
+
+    This helper centralises the mapping from string granularities (e.g. "monthly")
+    to the underlying window generators, so orchestration code does not need to
+    repeat the same if/elif chains.
+    """
+
+    if granularity == "weekly":
+        return get_weeks(start, end)
+    if granularity == "biweekly":
+        return get_biweeks(start, end)
+    if granularity == "monthly":
+        return get_months(start, end)
+    if granularity == "quarterly":
+        return get_quarters(start, end)
+    if granularity == "semiannual":
+        return get_semiannual(start, end)
+    if granularity == "yearly":
+        return get_years(start, end)
+    raise ValueError(f"Unsupported granularity: {granularity}")
+
+
 def _daterange(start: date, end: date, step_days: int) -> Iterable[tuple[date, date]]:
     current = start
     delta = timedelta(days=step_days)

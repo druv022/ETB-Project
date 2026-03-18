@@ -8,7 +8,6 @@ and ranking style views.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -18,7 +17,6 @@ from . import data_access
 from .report_base import BaseReport, ReportContext
 
 
-@dataclass
 class ProductCategoryReport(BaseReport):
     """Concrete implementation of the product & category performance report."""
 

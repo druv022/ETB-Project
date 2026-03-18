@@ -13,6 +13,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
@@ -80,6 +81,31 @@ def connect(config: DBConfig | None = None) -> sqlite3.Connection:
     return sqlite3.connect(db_path)
 
 
+@lru_cache(maxsize=1)
+def _load_product_catalog() -> pd.DataFrame:
+    """
+    Load the product catalog containing category information.
+
+    This is cached so repeated reporting calls do not repeatedly hit the filesystem.
+    """
+
+    project_root = Path(__file__).resolve().parents[3]
+    catalog_path = (
+        project_root
+        / "tools"
+        / "data_generation"
+        / "Transaction_data"
+        / "Ed_Data"
+        / "PRODUCT_CATALOG.csv"
+    )
+    if not catalog_path.exists():
+        raise FileNotFoundError(f"Product catalog not found at {catalog_path}")
+
+    catalog = pd.read_csv(catalog_path)
+    # We only need a lightweight view for joins.
+    return catalog[["Product_ID", "Category"]].copy()
+
+
 def load_transactions(
     start_date: str | None = None,
     end_date: str | None = None,
@@ -121,6 +147,16 @@ def load_transactions(
         df = pd.read_sql_query(query, conn, params=params)
     finally:
         conn.close()
+
+    # Enrich with product/category metadata when available.
+    if "Category" not in df.columns and "Product_ID" in df.columns:
+        try:
+            catalog = _load_product_catalog()
+        except FileNotFoundError:
+            # If the catalog is missing we still return the base transaction data.
+            return df
+
+        df = df.merge(catalog, on="Product_ID", how="left")
 
     return df
 

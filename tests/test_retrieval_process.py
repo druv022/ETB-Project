@@ -3,6 +3,8 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+pytest.importorskip("langchain_core")
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 

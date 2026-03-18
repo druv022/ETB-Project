@@ -8,14 +8,12 @@ observable from the transaction dataset.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
 
 from .report_base import BaseReport, ReportContext
 
 
-@dataclass
 class FinancialMarginReport(BaseReport):
     """Concrete implementation of the financial & margin report."""
 

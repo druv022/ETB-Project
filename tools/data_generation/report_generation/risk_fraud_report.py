@@ -8,7 +8,6 @@ transactions – that could warrant additional review.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -17,7 +16,6 @@ import seaborn as sns
 from .report_base import BaseReport, ReportContext
 
 
-@dataclass
 class RiskFraudReport(BaseReport):
     """Concrete implementation of the risk, fraud & controls report."""
 

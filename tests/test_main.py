@@ -12,6 +12,9 @@ if TYPE_CHECKING:
     from _pytest.capture import CaptureFixture
 
 
+pytest.importorskip("langchain_core")
+
+
 def test_version() -> None:
     """Test that version is defined."""
     assert __version__ is not None

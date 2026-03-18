@@ -1,0 +1,49 @@
+# Narrative LLM configuration for reporting tools.
+#
+# This file lives under `tools/data_generation/report_generation/` so that
+# it is clearly scoped to the reporting utilities and does not affect the
+# main application under `src/`.
+#
+# You can switch between different backends:
+# - openai    – standard OpenAI API (api_base usually omitted)
+# - openrouter – OpenRouter API (api_base must be https://openrouter.ai/api/v1)
+# - ollama    – local Ollama server (api_base is your Ollama host, or omit for localhost)
+#
+# Values here can be overridden by environment variables:
+# - REPORT_LLM_BACKEND      – overrides `backend`
+# - REPORT_LLM_MODEL        – overrides `model`
+# - REPORT_LLM_API_BASE     – overrides `api_base`
+# - REPORT_LLM_API_KEY_ENV  – overrides `api_key_env`
+#
+# The reporting workflow (`run_report_graph.py`) selects between
+# deterministic vs LLM-backed narratives; this file controls which LLM
+# provider and model are used when the LLM path is active.
+
+backend: openrouter
+model: nvidia/nemotron-3-super-120b-a12b:free
+api_base: https://openrouter.ai/api/v1
+api_key_env: OPENROUTER_API_KEY
+
+# For local Ollama, uncomment and adjust:
+# backend: ollama
+# model: llama3
+# api_base: http://localhost:11434
+
+temperature: 0.2
+max_tokens:
+timeout: 60
+
+evaluation_enabled: true
+evaluation_min_score: 7.5
+max_regeneration_attempts: 2
+
+evaluation_system_prompt: |
+  You are a senior management consultant reviewing automatically generated PDF reports.
+  Rate the overall quality of each report on a 0–10 scale, where 10 is a polished, executive-ready deck.
+  Consider structure, clarity, narrative insight, visual quality of charts, and coherence between text and visuals.
+  Provide: (1) a numeric score, (2) a short justification, and (3) 3–5 concrete suggestions for improvement.
+
+rewrite_system_prompt: |
+  You are a senior management consultant rewriting report narratives.
+  Improve the narrative using the evaluator's feedback while staying strictly grounded in the provided data and constraints.
+  Preserve all factual content but enhance clarity, structure, and executive tone.

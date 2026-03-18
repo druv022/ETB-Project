@@ -9,7 +9,6 @@ intended for illustrative purposes rather than production forecasting.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -19,7 +18,6 @@ from . import data_access
 from .report_base import BaseReport, ReportContext
 
 
-@dataclass
 class ForecastingPlanningReport(BaseReport):
     """Concrete implementation of the forecasting & planning report."""
 

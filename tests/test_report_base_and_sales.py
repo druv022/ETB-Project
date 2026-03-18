@@ -1,6 +1,10 @@
 from datetime import date
 from pathlib import Path
 
+import pytest
+
+pytest.importorskip("matplotlib")
+
 from tools.data_generation.report_generation.report_base import (
     BaseReport,
     ReportContext,
