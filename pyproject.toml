@@ -23,9 +23,15 @@ classifiers = [
 ]
 
 dependencies = [
-
     "pydantic>=2.5",
-
+    "PyYAML>=6.0",
+    "types-PyYAML>=6.0",
+    "langchain-core>=0.3",
+    "langchain-community>=0.3",
+    "langchain-text-splitters>=0.3",
+    "langchain-ollama>=0.3.0",
+    "langchain-openai>=0.3.0",
+    "faiss-cpu>=1.7.4"
 ]
 
 [project.optional-dependencies]
@@ -95,6 +101,7 @@ ignore = [
 
 [tool.mypy]
 python_version = "3.10"
+ignore_missing_imports = true  # pre-commit/CI may run without venv; third-party has no stubs
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -110,6 +117,21 @@ strict_equality = true
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
+
+# Allow type: ignore when stubs missing; avoid "unused" when stubs present
+[[tool.mypy.overrides]]
+module = "etb_project.config"
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
+module = "etb_project.retrieval.loader"
+warn_unused_ignores = false
+
+# Third-party (faiss, etc.) without stubs; allow no-any-return ignores
+[[tool.mypy.overrides]]
+module = "etb_project.retrieval.process"
+ignore_missing_imports = true
+warn_unused_ignores = false
 
 [tool.pytest.ini_options]
 minversion = "7.0"
