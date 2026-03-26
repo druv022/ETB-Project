@@ -55,12 +55,40 @@ def ensure_sqlite_db(config: DBConfig | None = None) -> Path:
     if cfg.db_path.exists():
         return cfg.db_path
 
+    cfg.db_path.parent.mkdir(parents=True, exist_ok=True)
     sql_file = cfg.db_path.with_suffix(".sql")
     if not sql_file.exists():
-        raise FileNotFoundError(
-            f"Expected SQL file not found at {sql_file}. "
-            "Generate it first with the transaction data tools."
-        )
+        # In CI and fresh checkouts, we may not have the large seed SQL file
+        # (it can be intentionally excluded from the repository). For report
+        # generation we still want a valid, empty database so workflows/tests
+        # can run and gracefully report "no data" scenarios.
+        conn = sqlite3.connect(cfg.db_path)
+        try:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS transactions (
+                    Transaction_ID TEXT,
+                    Transaction_Date TEXT,
+                    Transaction_Time TEXT,
+                    Store_ID TEXT,
+                    Store_Region TEXT,
+                    Order_Channel TEXT,
+                    Customer_ID TEXT,
+                    Customer_Type TEXT,
+                    Product_ID TEXT,
+                    SKU TEXT,
+                    Quantity_Sold INTEGER,
+                    Gross_Sales_Value REAL,
+                    Discount_Amount REAL,
+                    Discount_% REAL,
+                    Net_Sales_Value REAL,
+                    Tax_amount REAL,
+                    Total_Value REAL
+                );
+                """)
+            conn.commit()
+        finally:
+            conn.close()
+        return cfg.db_path
 
     conn = sqlite3.connect(cfg.db_path)
     try:

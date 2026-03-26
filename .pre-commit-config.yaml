@@ -45,7 +45,13 @@ repos:
     rev: 1.9.4
     hooks:
       - id: bandit
-        args: [-r, ., -ll]
+        args:
+          # Avoid scanning virtualenv and other non-source directories.
+          - -r
+          - .
+          - -ll
+          - -x
+          - ./.venv,./venv,./.tox,./.mypy_cache,./.ruff_cache,./build,./dist,./.eggs
         exclude: ^tests/
         pass_filenames: false
 

@@ -62,3 +62,7 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-03-18**: Remove the `--category` CLI requirement in `run_report_graph.py` so that, by default, the reporting workflow runs for all categories unless a specific category is provided.
 
 - **2026-03-18**: Fix pre-commit failures for reporting utilities by resolving Ruff warnings (regex format specifiers, ambiguous variable names, unused locals, missing `Iterable` import) and the `check-docstring-first` hook so that `git commit` passes cleanly.
+
+- **2026-03-26**: Fix CI pytest failures when the large seed SQL file is missing by changing `ensure_sqlite_db()` to create an empty SQLite DB with a minimal `transactions` schema instead of raising `FileNotFoundError`.
+
+- **2026-03-26**: Fix Bandit noise/failures by excluding `.venv` (and other build/venv caches) from Bandit scans in both pre-commit and GitHub Actions, preventing third-party site-packages findings from failing CI.
