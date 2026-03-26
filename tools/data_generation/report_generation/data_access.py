@@ -51,8 +51,42 @@ def ensure_sqlite_db(config: DBConfig | None = None) -> Path:
     expected to run occasionally (e.g. the first time reports are generated).
     """
 
+    def _ensure_transactions_table(conn: sqlite3.Connection) -> None:
+        # Keep this schema lightweight: it exists to allow "empty DB" operation
+        # in CI/fresh checkouts when the large seed SQL file is not present.
+        # Column names must be valid SQLite identifiers; quote `Discount_%`.
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS transactions (
+                Transaction_ID TEXT,
+                Transaction_Date TEXT,
+                Transaction_Time TEXT,
+                Store_ID TEXT,
+                Store_Region TEXT,
+                Order_Channel TEXT,
+                Customer_ID TEXT,
+                Customer_Type TEXT,
+                Product_ID TEXT,
+                SKU TEXT,
+                Quantity_Sold INTEGER,
+                Gross_Sales_Value REAL,
+                Discount_Amount REAL,
+                "Discount_%" REAL,
+                Net_Sales_Value REAL,
+                Tax_amount REAL,
+                Total_Value REAL
+            );
+            """)
+
     cfg = config or default_db_config()
     if cfg.db_path.exists():
+        # Defensive: if a previous run created the DB but failed before creating
+        # the schema, ensure the `transactions` table exists.
+        conn = sqlite3.connect(cfg.db_path)
+        try:
+            _ensure_transactions_table(conn)
+            conn.commit()
+        finally:
+            conn.close()
         return cfg.db_path
 
     cfg.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -64,27 +98,7 @@ def ensure_sqlite_db(config: DBConfig | None = None) -> Path:
         # can run and gracefully report "no data" scenarios.
         conn = sqlite3.connect(cfg.db_path)
         try:
-            conn.executescript("""
-                CREATE TABLE IF NOT EXISTS transactions (
-                    Transaction_ID TEXT,
-                    Transaction_Date TEXT,
-                    Transaction_Time TEXT,
-                    Store_ID TEXT,
-                    Store_Region TEXT,
-                    Order_Channel TEXT,
-                    Customer_ID TEXT,
-                    Customer_Type TEXT,
-                    Product_ID TEXT,
-                    SKU TEXT,
-                    Quantity_Sold INTEGER,
-                    Gross_Sales_Value REAL,
-                    Discount_Amount REAL,
-                    Discount_% REAL,
-                    Net_Sales_Value REAL,
-                    Tax_amount REAL,
-                    Total_Value REAL
-                );
-                """)
+            _ensure_transactions_table(conn)
             conn.commit()
         finally:
             conn.close()
@@ -95,6 +109,7 @@ def ensure_sqlite_db(config: DBConfig | None = None) -> Path:
         with sql_file.open("r", encoding="utf-8") as f:
             script = f.read()
         conn.executescript(script)
+        _ensure_transactions_table(conn)
         conn.commit()
     finally:
         conn.close()
