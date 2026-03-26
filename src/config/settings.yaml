@@ -1,0 +1,10 @@
+# Application settings (CLI flags override these when provided)
+pdf: "/Users/dhrubapujary/z_EDUCATION/MBT/Mod 3/Emerging Tech/Project/ETB-Project/data/Introduction to Agents.pdf"
+folder: null
+query: ""
+
+# Retriever
+retriever_k: 10
+
+# Optional: logging level
+log_level: "INFO"

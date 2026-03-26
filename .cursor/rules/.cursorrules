@@ -24,6 +24,9 @@
 - Fail fast with clear error messages
 - Use context managers for resource management
 
+## Error fix
+- When fixing bugs, always find the real fix instead of supressing error
+
 ## Architecture Patterns
 
 ### Project Structure
