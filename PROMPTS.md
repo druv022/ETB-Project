@@ -41,6 +41,31 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-03-08**: LangGraph Migration Plan — Implementing an extensible LangGraph-based RAG pipeline (ingest_query → retrieve_rag → generate_answer) with future support for query rewriting, parallel retrieval, SQL tools, reasoning, and response shaping, and updating tests/docs accordingly.
 - **2026-03-08**: Fix mypy pre-commit failure by adding an explicit `-> Any` return type annotation to `build_rag_graph` in `graph_rag.py` on the `feature/langgraph-migration` branch so the mypy hook passes.
 
+- **2026-03-18**: Plan and implement a standalone PyMuPDF-based document processor that extracts text and images, performs configurable LangChain-based chunking, writes artifacts to disk, and integrates with the existing FAISS-based RAG pipeline.
+- **2026-03-18 16:25:46 CDT**: `are the extracted images information incorporated in the main pipeline ?` (Context: checking whether image metadata flows into the RAG/vector retrieval pipeline)
+- **2026-03-19 08:06:03 CDT**: `Implement the plan to incorporate image captioning info in the serialized object using a VLM model, keeping the code modular.` (Context: adding ImageCaptioner abstractions, OpenRouter backend, processor integration, tests, and docs)
+- **2026-03-19 10:17:38 CDT**: `model information for openrouterimage captioner should be read from the config file. The api key will be present in the .env file` (Context: adjust OpenRouterImageCaptioner to resolve model via load_config/settings.yaml and api key via OPENROUTER_API_KEY env)
+- **2026-03-19 13:57:32 CDT**: `@/Users/dhrubapujary/.cursor/plans/two-faiss-indices_96027c6a.plan.md build` (Context: build dual FAISS vector stores for text chunks and image-caption documents)
+- **2026-03-19 14:30:56 CDT**: `remove the redundent codes related to two faiss index` (Context: refactor/remove duplicated dual-index logic while preserving behavior)
+- **2026-03-19 14:51:10 CDT**: `Update the readme with description of the content and the fix path of running the document preprocessing step to create/update the vecotr store and the basic rag using the retrival from the updated vecotr_store.` (Context: README update for corrected preprocessing/vector-store/RAG execution path and content description)
+- **2026-03-19**: `Dual Retriever Main Pipeline Plan Implement the plan as specified, it is attached for your reference. Do NOT edit the plan file itself.` (Context: add DualRetriever meta-retriever, wire dual vector stores into main pipeline, and update tests/docs)
+
+- **2026-03-20 09:17:29 CDT**: `Modular vector DB: build/store vs RAG load` (Context: implement the modular vector DB indexing plan via new vectorstore layer, CLI persistence, and main load-only behavior; update tests + README.)
+
+- **2026-03-20 10:12:42 CDT**: `Add --pdf-dir to CLI and update VDB` (Context: iterate PDFs in a folder, build/update the persisted vector store indices.)
+
+- **2026-03-20 10:21:28 CDT**: `Default FAISS+persist; append or reset VDB` (Context: enable default build/persist, append when VDB exists, add flag to delete and rebuild fresh.)
+- **2026-03-20 12:21:41 CDT**: `Store every artifical created under src/ codebase in the folder data folder with respective naming convention. Make this changes throughout the src code. Test only in conda etb env` (Context: route artifact outputs (vector index + extracted docs/images) under project `data/` directory and update docs/tests accordingly.)
+
+- **2026-03-20**: `fix it.` (Context: wrap Ollama embeddings so single-document `embed_documents` output is always 2D for LangChain FAISS; fix `ValueError: not enough values to unpack (expected 2, got 1)` at `faiss.index.add`)
+
+- **2026-03-25**: `Implement the plan as specified` (OpenAI SDK image captioning refactor: `ChatCompletionImageCaptioner`, `OpenAIImageCaptioner`, config `openai_image_caption_model`, CLI precedence, tests; README/PROMPTS updates.)
+
+- **2026-03-25**: `use openouter api with openapi backend for testing` (Context: default `tools/test_image_captioning.py` to `--backend openrouter`, document OpenRouter + OpenAI Python SDK; preflight `OPENROUTER_API_KEY` / `OPENAI_API_KEY`; README Tools update.)
+
+- **2026-03-26**: `remove any extraneous information from the parent README.md file other than keeping the basic information and usage example. All additional description for each of the feature can be moved to separate markdown file in the docs folder. Be as descriptive as possible in the docs folder but remove extra information from the main README.md file.` (Context: restructure root README into a brief entry point and move detailed feature documentation into `docs/` pages.)
+
+- **2026-03-26**: `README → docs re-organization plan Implement the plan as specified, it is attached for your reference. Do NOT edit the plan file itself.` (Context: create a docs IA under `docs/`, migrate detailed README content into dedicated pages, and slim the root README to an entry point with links.)
 - **2026-03-09 00:00:00**: Implement retail reporting suite using Seaborn/Matplotlib and PDF generation under `tools/data_generation/report_generation`, with separate scripts for 8 report categories and multiple time granularities.
 
 - **2026-03-09**: Fix pre-commit failures @git-error-1773071198447 by resolving Ruff loop-variable and `zip` strictness warnings in `financial_margin_report.py`, suppressing Bandit B608 for the generated SQL in `generate_final_v3.py`, and ensuring mypy is happy with the `yaml` import in `src/etb_project/config.py`.
@@ -66,3 +91,4 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-03-26**: Fix CI pytest failures when the large seed SQL file is missing by changing `ensure_sqlite_db()` to create an empty SQLite DB with a minimal `transactions` schema instead of raising `FileNotFoundError`.
 
 - **2026-03-26**: Fix Bandit noise/failures by excluding `.venv` (and other build/venv caches) from Bandit scans in both pre-commit and GitHub Actions, preventing third-party site-packages findings from failing CI.
+- **2026-03-26 11:58:20 EDT**: `Fix the issue: Run pytest tests/ -v --cov=etb_project --cov-report=term-missing --cov-report=html --cov-report=xml ...` (Context: fix Windows path separator mismatch in vectorstore manifest `pdf_path` during append/persist flow causing two CI test failures.)
