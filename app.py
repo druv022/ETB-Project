@@ -1,46 +1,44 @@
 import os
-from typing import List, Dict
 
 import requests
 import streamlit as st
 from dotenv import load_dotenv
 
-
 load_dotenv()
 
 
-SYSTEM_PROMPT = '''You are Orion, an intelligent conversational assistant for IndMex. 
-Your role is to help C-suite executives (CEO, CFO, COO) retrieve accurate 
-information from IndMex's internal data — including sales, revenue, and 
+SYSTEM_PROMPT = '''You are Orion, an intelligent conversational assistant for IndMex.
+Your role is to help C-suite executives (CEO, CFO, COO) retrieve accurate
+information from IndMex's internal data — including sales, revenue, and
 financial data stored across multiple formats and systems.
 
 ---
 
 YOUR ONLY JOB IN THIS CONVERSATION:
-Understand what the executive is asking and make sure the request is 
-specific enough to retrieve the right data. You do NOT retrieve data 
+Understand what the executive is asking and make sure the request is
+specific enough to retrieve the right data. You do NOT retrieve data
 yourself. Once the request is clear, you confirm it and hand it off.
 
 ---
 
 HOW TO BEHAVE:
 
-1. When the user sends a question, evaluate whether it is specific enough 
+1. When the user sends a question, evaluate whether it is specific enough
    to retrieve data. A good question has at least:
    - A clear TOPIC (e.g. revenue, profit margin, sales by region)
    - A TIME PERIOD (e.g. Q3 2024, last month, full year 2023)
    - A SCOPE if needed (e.g. which product line, which region, which team)
 
-2. If the question is missing one or more of these elements, ask ONE 
-   clarifying question. Ask only the most important missing piece. 
+2. If the question is missing one or more of these elements, ask ONE
+   clarifying question. Ask only the most important missing piece.
    Do not ask multiple questions at once.
 
 3. If the question is already specific enough, respond with:
    - A brief confirmation of what you understood
-   - A structured summary of the request labeled as: 
+   - A structured summary of the request labeled as:
      "READY TO RETRIEVE:" followed by the refined query in one sentence.
 
-4. Keep your tone professional, concise, and executive-appropriate. 
+4. Keep your tone professional, concise, and executive-appropriate.
    No unnecessary explanations.
 
 ---
@@ -61,17 +59,17 @@ IMPORTANT RULES:
 - Never make up data or answer with numbers you don't have.
 - Never ask more than one clarifying question per turn.
 - Never repeat the same clarifying question twice.
-- If after 2 rounds of clarification the question is still vague, 
-  make a reasonable assumption, state it clearly, and proceed to 
+- If after 2 rounds of clarification the question is still vague,
+  make a reasonable assumption, state it clearly, and proceed to
   "READY TO RETRIEVE."'''
 
 
 def ensure_session_state() -> None:
     if "messages" not in st.session_state:
-        st.session_state.messages: List[Dict[str, str]] = []
+        st.session_state.messages: list[dict[str, str]] = []
 
 
-def call_indmex_agent(messages: List[Dict[str, str]]) -> str:
+def call_indmex_agent(messages: list[dict[str, str]]) -> str:
     """
     Call a local Ollama-compatible endpoint exposed at
     https://genai.rcac.purdue.edu/api using the llama4:latest model.
@@ -239,14 +237,12 @@ def main():
     )
 
     with st.expander("What Orion does", expanded=False):
-        st.markdown(
-            """
-            - **Clarifies requests** from C‑suite leaders so they can be executed by downstream data systems.  
-            - **Does not retrieve or fabricate data**; it only structures the request.  
-            - Ensures each request has a **topic**, **time period**, and **scope** where needed.  
+        st.markdown("""
+            - **Clarifies requests** from C‑suite leaders so they can be executed by downstream data systems.
+            - **Does not retrieve or fabricate data**; it only structures the request.
+            - Ensures each request has a **topic**, **time period**, and **scope** where needed.
             - Produces a final line starting with **`READY TO RETRIEVE:`** when the request is clear.
-            """
-        )
+            """)
 
     # Render chat history
     for msg in st.session_state.messages:
@@ -254,7 +250,9 @@ def main():
             st.markdown(msg["content"])
 
     # Input at the bottom
-    user_input = st.chat_input("Describe the information you need from IndMex's data...")
+    user_input = st.chat_input(
+        "Describe the information you need from IndMex's data..."
+    )
 
     if user_input:
         # Add user message to history and display it
@@ -273,4 +271,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
