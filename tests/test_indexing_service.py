@@ -55,7 +55,7 @@ def test_build_and_persist_index_happy_path() -> None:
     assert call_kwargs["text_vectorstore"] is text_vs
     assert call_kwargs["caption_vectorstore"] is caption_vs
     assert call_kwargs["manifest"].backend == "faiss"
-    assert call_kwargs["manifest"].pdf_path == str(pdf_path)
+    assert call_kwargs["manifest"].pdf_path == pdf_path.as_posix()
     assert call_kwargs["manifest"].chunk_size == 100
     assert call_kwargs["manifest"].chunk_overlap == 10
     assert call_kwargs["manifest"].embedding_model_id == DEFAULT_EMBEDDING_MODEL_ID
@@ -190,7 +190,7 @@ def test_build_and_persist_index_for_pdfs_happy_path() -> None:
 
     manifest = persist_kwargs["manifest"]
     assert manifest.backend == "faiss"
-    assert manifest.pdf_path == ", ".join(str(p) for p in sorted(pdf_paths))
+    assert manifest.pdf_path == ", ".join(p.as_posix() for p in sorted(pdf_paths))
     assert manifest.chunk_size == 100
     assert manifest.chunk_overlap == 10
     assert manifest.embedding_model_id == DEFAULT_EMBEDDING_MODEL_ID
