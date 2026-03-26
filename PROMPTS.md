@@ -91,3 +91,4 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-03-26**: Fix CI pytest failures when the large seed SQL file is missing by changing `ensure_sqlite_db()` to create an empty SQLite DB with a minimal `transactions` schema instead of raising `FileNotFoundError`.
 
 - **2026-03-26**: Fix Bandit noise/failures by excluding `.venv` (and other build/venv caches) from Bandit scans in both pre-commit and GitHub Actions, preventing third-party site-packages findings from failing CI.
+- **2026-03-26 11:58:20 EDT**: `Fix the issue: Run pytest tests/ -v --cov=etb_project --cov-report=term-missing --cov-report=html --cov-report=xml ...` (Context: fix Windows path separator mismatch in vectorstore manifest `pdf_path` during append/persist flow causing two CI test failures.)

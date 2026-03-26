@@ -24,6 +24,11 @@ from .manifest import IndexManifest
 DEFAULT_EMBEDDING_MODEL_ID = "ollama:qwen3-embedding:0.6b"
 
 
+def _path_to_manifest_str(path: Path) -> str:
+    """Return a stable POSIX-like path string for manifest storage."""
+    return path.as_posix()
+
+
 def build_and_persist_index(
     *,
     pdf_path: Path,
@@ -45,7 +50,7 @@ def build_and_persist_index(
     manifest_backend = getattr(backend, "backend_name", "faiss")
     manifest = IndexManifest.create(
         backend=str(manifest_backend),
-        pdf_path=str(pdf_path),
+        pdf_path=_path_to_manifest_str(pdf_path),
         chunk_size=chunking_config.chunk_size,
         chunk_overlap=chunking_config.chunk_overlap,
         embedding_model_id=DEFAULT_EMBEDDING_MODEL_ID,
@@ -127,7 +132,7 @@ def build_and_persist_index_for_pdfs(
     )
 
     manifest_backend = getattr(backend, "backend_name", "faiss")
-    pdf_path_field = ", ".join(str(p) for p in pdf_paths_sorted)
+    pdf_path_field = ", ".join(_path_to_manifest_str(p) for p in pdf_paths_sorted)
     manifest = IndexManifest.create(
         backend=str(manifest_backend),
         pdf_path=pdf_path_field,
@@ -146,7 +151,7 @@ def build_and_persist_index_for_pdfs(
 
 
 def _combine_pdf_path_field(old_pdf_path: str, new_pdf_paths: list[Path]) -> str:
-    new_pdf_field = ", ".join(str(p) for p in new_pdf_paths)
+    new_pdf_field = ", ".join(_path_to_manifest_str(p) for p in new_pdf_paths)
     if not old_pdf_path.strip():
         return new_pdf_field
     return f"{old_pdf_path}, {new_pdf_field}"
