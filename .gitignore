@@ -149,3 +149,4 @@ tools/data_generation/Transaction_data/reconciliation_summary_full.txt
 tools/data_generation/Transaction_data/transactions_JanFeb_2020.csv
 .langgraph_api/*
 tools/data_generation/report_generation/output/*
+src/document_output/*
