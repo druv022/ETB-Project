@@ -1,0 +1,8 @@
+{
+    "dependencies": ["."],
+    "graphs": {
+      "rag_app": "./src/etb_project/studio_entry.py:rag_app",
+      "report_app": "./tools/data_generation/report_generation/studio_report_entry.py:report_app"
+    },
+    "env": ".env"
+  }

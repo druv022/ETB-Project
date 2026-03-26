@@ -59,7 +59,7 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest tests/ -v --cov=etb_project --cov-report=xml --cov-report=term
+          pytest tests/ -v --cov=etb_project --cov-report=term-missing --cov-report=html --cov-report=xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
@@ -87,7 +87,7 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run Bandit security scan
-        run: bandit -r . -ll
+        run: bandit -r . -ll -x ./.venv,./venv,./.tox,./.mypy_cache,./.ruff_cache,./build,./dist,./.eggs
 
       - name: Run Safety check
         run: safety check --file requirements.txt

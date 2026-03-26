@@ -32,18 +32,26 @@ repos:
         args: [--fix, --exit-non-zero-on-fix]
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.19.1
+  # Mypy: same command as pre-push and CI (no --ignore-missing-imports)
+  - repo: local
     hooks:
       - id: mypy
-        args: [--ignore-missing-imports]
-        exclude: ^tests/
+        name: mypy
+        entry: bash -c 'mypy src/etb_project'
+        language: system
+        pass_filenames: false
 
   - repo: https://github.com/PyCQA/bandit
     rev: 1.9.4
     hooks:
       - id: bandit
-        args: [-r, ., -ll]
+        args:
+          # Avoid scanning virtualenv and other non-source directories.
+          - -r
+          - .
+          - -ll
+          - -x
+          - ./.venv,./venv,./.tox,./.mypy_cache,./.ruff_cache,./build,./dist,./.eggs
         exclude: ^tests/
         pass_filenames: false
 
@@ -55,11 +63,11 @@ repos:
       - id: python-no-eval
       - id: python-use-type-annotations
 
-  # Pre-push: verify lint and format (same as CI) before allowing push
+  # Pre-push: same lint/format/type-check as CI and pre-commit mypy
   - repo: local
     hooks:
-      - id: lint-and-format-check
-        name: Lint and format check (pre-push)
+      - id: lint-format-typecheck
+        name: Lint, format check, type-check (pre-push)
         entry: bash -c 'ruff check . && black --check . && mypy src/etb_project'
         language: system
         stages: [pre-push]

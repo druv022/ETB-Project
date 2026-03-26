@@ -141,10 +141,13 @@ logs/
 
 # Generated transaction data (large SQL file can be regenerated using generate_final_v3.ps1)
 tools/data_generation/Transaction_data/transaction_database_5yrs_full.sql
+tools/data_generation/Transaction_data/reconciliation_report.csv
 
 framework/*
 data/*
-src/document_output/*
+tools/data_generation/Transaction_data/reconciliation_summary_full.txt
+tools/data_generation/Transaction_data/transactions_JanFeb_2020.csv
 .langgraph_api/*
 tools/data_generation/report_generation/output/*
+src/document_output/*
 _pydeps/*

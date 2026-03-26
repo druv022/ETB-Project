@@ -1,0 +1,22 @@
+# Application settings (CLI flags override these when provided)
+pdf: "/Users/dhrubapujary/z_EDUCATION/MBT/Mod 3/Emerging Tech/Project/ETB-Project/data/Introduction to Agents.pdf"
+folder: null
+query: ""
+
+# Retriever
+retriever_k: 10
+
+# Optional: logging level
+log_level: "INFO"
+
+# Persisted vector store (dual: text + image captions)
+# `main` will load from this path when present.
+vector_store_backend: "faiss"
+vector_store_path: "data/vector_index"
+
+# Vision-language model selection for image captioning.
+# OpenRouter: set openrouter_image_caption_model (CLI prefers this if set).
+# Direct OpenAI: set openai_image_caption_model and OPENAI_API_KEY.
+# Example OpenRouter: "openai/gpt-4.1-mini"
+openrouter_image_caption_model: nvidia/nemotron-nano-12b-v2-vl:free
+openai_image_caption_model: null

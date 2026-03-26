@@ -29,18 +29,17 @@ venv: ## Create virtual environment
 	$(PYTHON) -m venv $(VENV)
 	@echo "Virtual environment created. Activate with: source $(VENV)/bin/activate"
 
-test: ## Run tests
+test: ## Run tests (same args as CI; xml for codecov)
 	@echo "Running tests..."
-	pytest tests/ -v --cov=etb_project --cov-report=term-missing --cov-report=html
+	pytest tests/ -v --cov=etb_project --cov-report=term-missing --cov-report=html --cov-report=xml
 
 test-watch: ## Run tests in watch mode
 	@echo "Running tests in watch mode..."
 	pytest-watch tests/
 
-lint: ## Run linters
+lint: ## Run linters (same as pre-push and CI lint job)
 	@echo "Running linters..."
-	ruff check .
-	mypy src/etb_project
+	ruff check . && black --check . && mypy src/etb_project
 
 format: ## Format code
 	@echo "Formatting code..."
@@ -81,6 +80,6 @@ pre-commit: ## Run pre-commit hooks on all files
 	@echo "Running pre-commit hooks..."
 	pre-commit run --all-files
 
-pre-push: ## Run pre-push checks (lint + format) without pushing
-	@echo "Running pre-push lint and format checks..."
+pre-push: ## Run pre-push checks (same as CI lint job)
+	@echo "Running pre-push checks..."
 	ruff check . && black --check . && mypy src/etb_project
