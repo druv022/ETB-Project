@@ -144,10 +144,10 @@ tools/data_generation/Transaction_data/transaction_database_5yrs_full.sql
 tools/data_generation/Transaction_data/reconciliation_report.csv
 
 framework/*
-data/Introduction to Agents.pdf
-.langgraph_api/*
-
 data/*
+tools/data_generation/Transaction_data/reconciliation_summary_full.txt
+tools/data_generation/Transaction_data/transactions_JanFeb_2020.csv
+.langgraph_api/*
 tools/data_generation/report_generation/output/*
-src/document_output/images/*
+src/document_output/*
 _pydeps/*

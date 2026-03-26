@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
 import pytest
+
+pytest.importorskip("langchain_core")
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage
 

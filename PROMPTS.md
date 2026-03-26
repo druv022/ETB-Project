@@ -66,3 +66,28 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-03-26**: `remove any extraneous information from the parent README.md file other than keeping the basic information and usage example. All additional description for each of the feature can be moved to separate markdown file in the docs folder. Be as descriptive as possible in the docs folder but remove extra information from the main README.md file.` (Context: restructure root README into a brief entry point and move detailed feature documentation into `docs/` pages.)
 
 - **2026-03-26**: `README → docs re-organization plan Implement the plan as specified, it is attached for your reference. Do NOT edit the plan file itself.` (Context: create a docs IA under `docs/`, migrate detailed README content into dedicated pages, and slim the root README to an entry point with links.)
+- **2026-03-09 00:00:00**: Implement retail reporting suite using Seaborn/Matplotlib and PDF generation under `tools/data_generation/report_generation`, with separate scripts for 8 report categories and multiple time granularities.
+
+- **2026-03-09**: Fix pre-commit failures @git-error-1773071198447 by resolving Ruff loop-variable and `zip` strictness warnings in `financial_margin_report.py`, suppressing Bandit B608 for the generated SQL in `generate_final_v3.py`, and ensuring mypy is happy with the `yaml` import in `src/etb_project/config.py`.
+
+- **2026-03-12**: Fix `ImportError: attempted relative import with no known parent package` when running `tools/data_generation/report_generation/run_report_graph.py` directly by switching to an absolute import of `workflow_graph` so the script works with `PYTHONPATH=.` from the project root.
+- **2026-03-12**: Fix `AttributeError: 'dict' object has no attribute 'requested_granularities'` in `workflow_graph.run_workflow` by updating `ReportState` access to consistently use dict-style reads/writes (e.g. `state["current_stage"]`, `state.get("requested_granularities")`) and adjusting `PeriodDict` access similarly so the workflow runs correctly when invoked from `run_report_graph.py`.
+
+- **2026-03-13**: Fix `AttributeError: 'SalesPerformanceReport' object has no attribute '_db_config'` when running `run_report_graph.py` by removing `@dataclass` from all `BaseReport` subclasses (so `BaseReport.__init__` runs and `_db_config` is defined) and re-running the sales monthly workflow.
+- **2026-03-13**: how to visualize the tools datagenration graph in the studio — exploring how to expose the reporting workflow as a LangGraph graph for visualization in LangGraph Studio.
+- **2026-03-13**: Run the sql tool in the sandbox and retrieve the data for jan 1st 2020 to jan 31st 2020 — executing the reporting `tools_sql` helper against the synthetic transactions DB for the requested date window.
+- **2026-03-13**: Simplify and deduplicate the reporting tools by consolidating on the workflow/LangGraph pipeline, introducing shared helpers for period generation and no-data narratives, removing the legacy `run_reports.py` entrypoint, and updating the reporting README to reflect the new single entrypoint.
+- **2026-03-13**: populate the langgraph studio config with default values. Same as suggested in to execute the readme file — aligning `langgraph.json` with the recommended default Studio configuration for the RAG app and reporting workflow graphs.
+
+- **2026-03-18**: `sales_monthly_2020-01.pdf` narrative page shows raw Markdown (`**bold**`, backticks) and noisy characters — clean the PDF text rendering by stripping basic Markdown markers before escaping for Matplotlib so reports render as plain, readable prose.
+
+- **2026-03-18**: Upgrade reporting PDFs to executive consulting quality — add a shared Seaborn/Matplotlib executive theme, multi-page narrative layout with headings, standardised page sequencing, and an LLM-based PDF quality evaluator with a regeneration loop controlled via `llm_config.yaml`.
+
+- **2026-03-18**: Also emit a Markdown version of each report alongside the PDF in `tools_pdf.render_pdf`, and adjust sales performance charts so legends (especially for top stores) are placed outside the plotting area to prevent overlapping with the bars.
+- **2026-03-18**: Remove the `--category` CLI requirement in `run_report_graph.py` so that, by default, the reporting workflow runs for all categories unless a specific category is provided.
+
+- **2026-03-18**: Fix pre-commit failures for reporting utilities by resolving Ruff warnings (regex format specifiers, ambiguous variable names, unused locals, missing `Iterable` import) and the `check-docstring-first` hook so that `git commit` passes cleanly.
+
+- **2026-03-26**: Fix CI pytest failures when the large seed SQL file is missing by changing `ensure_sqlite_db()` to create an empty SQLite DB with a minimal `transactions` schema instead of raising `FileNotFoundError`.
+
+- **2026-03-26**: Fix Bandit noise/failures by excluding `.venv` (and other build/venv caches) from Bandit scans in both pre-commit and GitHub Actions, preventing third-party site-packages findings from failing CI.
