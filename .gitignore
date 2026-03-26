@@ -141,6 +141,13 @@ logs/
 
 # Generated transaction data (large SQL file can be regenerated using generate_final_v3.ps1)
 tools/data_generation/Transaction_data/transaction_database_5yrs_full.sql
+tools/data_generation/Transaction_data/reconciliation_report.csv
 
 framework/*
 data/Introduction to Agents.pdf
+.langgraph_api/*
+
+data/*
+tools/data_generation/report_generation/output/*
+src/document_output/images/*
+_pydeps/*

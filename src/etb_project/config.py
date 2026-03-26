@@ -17,6 +17,49 @@ class AppConfig(BaseModel):
     retriever_k: int = Field(default=10, ge=1, le=100)
     log_level: str = Field(default="INFO", pattern="^(DEBUG|INFO|WARNING|ERROR)$")
 
+    # Persisted dual vector store settings.
+    # When `main` runs, it will load the vector DB from `vector_store_path`
+    # instead of rebuilding it from the PDF (unless you explicitly run the
+    # indexing/build CLI).
+    vector_store_backend: str = "faiss"
+    vector_store_path: str | None = None
+
+    # Vision-language model selection for image captioning backends.
+    # Used by ``OpenRouterImageCaptioner`` / ``OpenAIImageCaptioner`` when
+    # instantiated without an explicit ``model`` argument.
+    openrouter_image_caption_model: str | None = None
+    openai_image_caption_model: str | None = None
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DATA_DIR = PROJECT_ROOT / "data"
+
+
+def resolve_artifact_path(path: str | Path | None) -> Path | None:
+    """Resolve an artifact path so relative values land under ``data/``.
+
+    This keeps generated artifacts (FAISS indices, extracted pages/chunks/images)
+    out of the project root and consistently under the top-level ``data/`` folder.
+    """
+
+    if path is None:
+        return None
+
+    p = Path(path).expanduser()
+    if p.is_absolute():
+        return p
+
+    # Normalize leading "./" to avoid double-prefixing.
+    parts = [part for part in p.parts if part not in ("", ".")]
+    if not parts:
+        return DATA_DIR
+
+    # If the caller already provided "data/..." keep it anchored under project root.
+    if parts[0] == "data":
+        return PROJECT_ROOT / Path(*parts)
+
+    return DATA_DIR / Path(*parts)
+
 
 def _default_config_path() -> Path:
     """Resolve default config path: try cwd-relative, then package-relative."""
@@ -46,4 +89,8 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
         return AppConfig()
     with open(path) as f:
         data = yaml.safe_load(f)
-    return AppConfig.model_validate(data if isinstance(data, dict) else {})
+    cfg = AppConfig.model_validate(data if isinstance(data, dict) else {})
+    if cfg.vector_store_path:
+        # Store persisted indexes under ``data/`` by default.
+        cfg.vector_store_path = str(resolve_artifact_path(cfg.vector_store_path))
+    return cfg
