@@ -66,8 +66,157 @@ python -m etb_project.main
 make run
 ```
 
-- If `query` is set in config, the app runs that single query and logs the retrieval results.
+- The app loads persisted FAISS indices (text chunks + image-caption chunks) from `vector_store_path` and runs each query through a merged dual retriever.
+- If `query` is set in config, the app runs that single query and logs the merged retrieval results.
 - If `query` is empty, the app enters an **interactive loop**: each question is passed through a LangGraph-based RAG graph (`ingest_query → retrieve_rag → generate_answer`) and the LLM's answer (grounded in the PDF where possible) is printed; empty line or Ctrl+C to exit.
+
+### Document preprocessing -> vector store build -> basic RAG retrieval
+
+Use this flow when you want to preprocess a PDF and build a persisted dual vector index (text + image captions) for RAG.
+
+**Fixed run path:** run all commands from the project root (`ETB-Project/`) after installing the package with `pip install -e .`.
+
+1) Preprocess the document and build/persist vector stores:
+
+```bash
+python -m etb_project.document_processor_cli \
+  --pdf "data/Introduction to Agents.pdf" \
+  --output-dir "./data/document_output" \
+  --chunk-size 1000 \
+  --chunk-overlap 200 \
+  --persist-index \
+  --vector-store-dir "./data/vector_index"
+```
+
+2) Run the app for basic RAG using the same updated PDF source:
+
+```bash
+python -m etb_project.main
+```
+
+Notes:
+- `etb_project.main` loads persisted FAISS indices from `vector_store_path` in `src/config/settings.yaml` (it does not rebuild from the PDF).
+- `main` uses dual retrieval by default: it queries both text and caption stores with the same input and merges/de-duplicates results before answer generation.
+- Re-running preprocessing with the same `--output-dir` updates the exported artifacts (`pages.json`, `chunks.jsonl`, and `images/`).
+
+### Standalone document processor (PyMuPDF)
+
+In addition to the main RAG application, there is a standalone, PyMuPDF-based document processor that:
+
+- Extracts **page text and images** from a PDF.
+- Writes artifacts to disk:
+  - `images/` (one image file per embedded image, converting JPEG2000-family types to PNG).
+  - `pages.json` (one entry per page with text, metadata, associated image info, and optional image captions).
+  - `chunks.jsonl` (one JSON record per chunk with `page_content` and `metadata`).
+- Returns chunk-level LangChain `Document` objects (text chunks) that can be fed into FAISS.
+  When an `ImageCaptioner` is configured, image captions are also generated and can be embedded/indexed separately.
+
+Run it from the project root (after `pip install -e .`):
+
+```bash
+python -m etb_project.document_processor_cli \
+  --pdf data/Introduction\ to\ Agents.pdf \
+  --output-dir ./data/document_output \
+  --chunk-size 1000 \
+  --chunk-overlap 200 \
+  --vector-store-dir ./data/vector_index
+```
+
+- Example: process multiple PDFs from a folder (build + persist one combined index):
+
+```bash
+python -m etb_project.document_processor_cli \
+  --pdf-dir ./data/pdfs \
+  --output-dir ./data/document_output \
+  --chunk-size 1000 \
+  --chunk-overlap 200 \
+  --vector-store-dir ./data/vector_index
+```
+
+- `--pdf`: path to the input PDF (required).
+- `--pdf-dir`: path to a folder of PDFs (one of `--pdf` or `--pdf-dir` is required). The CLI iterates `*.pdf` in the folder and builds a single combined vector index.
+- `--output-dir`: where artifacts will be written (default: `document_output`, stored under `data/`).
+- `--chunk-size` / `--chunk-overlap`: control how text is chunked using LangChain's `RecursiveCharacterTextSplitter`.
+- `--build-faiss`: builds in-memory FAISS indices for both (enabled by default):
+  - text chunks (from `chunks.jsonl`)
+  - image captions (from caption documents generated from extracted images; may be empty if captioning is not configured)
+- `--persist-index`: persists the FAISS indices to `--vector-store-dir` (or `vector_store_path` from settings.yaml). If the VDB already exists, new documents are appended (enabled by default).
+- `--vector-store-dir`: where to write the persisted vector index when using `--persist-index`.
+- `--reset-vdb`: delete the existing persisted vector index (VDB) and rebuild from scratch.
+
+If you want to reuse the chunked documents programmatically:
+
+```python
+from pathlib import Path
+
+from etb_project.document_processing.processor import ChunkingConfig, process_pdf
+from etb_project.retrieval.process import process_prechunked_documents
+
+pdf_path = Path("data/Introduction to Agents.pdf")
+output_dir = Path("data/document_output")
+
+chunk_config = ChunkingConfig(chunk_size=1000, chunk_overlap=200)
+chunk_docs = process_pdf(pdf_path, output_dir, chunk_config)
+vectorstore = process_prechunked_documents(chunk_docs)
+retriever = vectorstore.as_retriever(search_kwargs={"k": 10})
+```
+
+If you want both indices (text + captions) programmatically:
+
+```python
+from etb_project.document_processing import OpenRouterImageCaptioner
+from etb_project.document_processing.processor import ChunkingConfig
+from etb_project.retrieval.process import process_pdf_to_vectorstores
+
+chunk_config = ChunkingConfig(chunk_size=1000, chunk_overlap=200)
+captioner = OpenRouterImageCaptioner()
+
+text_vectorstore, caption_vectorstore = process_pdf_to_vectorstores(
+    pdf_path=pdf_path,
+    output_dir=output_dir,
+    chunking_config=chunk_config,
+    image_captioner=captioner,
+)
+```
+
+### Image captioning backends
+
+The document processor can optionally generate captions for extracted images via a pluggable `ImageCaptioner` interface:
+
+- **Interfaces and implementations** (in `etb_project.document_processing.captioning`):
+  - `ImageCaptioner`: abstract base interface for captioning images.
+  - `MockImageCaptioner`: returns deterministic placeholder captions (useful for tests and local development).
+  - `OpenRouterImageCaptioner`: uses a vision-capable model exposed via OpenRouter (for example `openai/gpt-4.1-mini`) to generate real captions.
+
+When an `ImageCaptioner` is provided to `process_pdf`:
+
+- Each image record in `pages.json` gains:
+  - `caption`: caption text (if one was produced).
+  - `caption_source`: a simple label such as `"vlm"` when the caption comes from a vision-language model.
+- Page-level `Document.metadata` gains an `image_captions` key containing a list of objects with:
+  - `path`: the image file path.
+  - `caption`: the generated caption.
+- Because the LangChain text splitter preserves metadata, chunk-level `Document` objects also carry `image_captions`, so downstream retrieval or prompting can incorporate this information.
+
+To use the OpenRouter backend in your own script:
+
+```python
+from pathlib import Path
+import os
+
+from etb_project.document_processing.captioning import OpenRouterImageCaptioner
+from etb_project.document_processing.processor import ChunkingConfig, process_pdf
+
+pdf_path = Path("data/Introduction to Agents.pdf")
+output_dir = Path("data/document_output")
+
+captioner = OpenRouterImageCaptioner()
+
+chunk_config = ChunkingConfig(chunk_size=1000, chunk_overlap=200)
+chunk_docs = process_pdf(pdf_path, output_dir, chunk_config, image_captioner=captioner)
+```
+
+If no `ImageCaptioner` is provided, the processor behaves exactly as before (no network calls are made and no caption fields are added).
 
 ## Tools (not installed)
 
@@ -168,18 +317,20 @@ etb_project/
 │   └── etb_project/           # Main package (installed with pip install .)
 │       ├── __init__.py
 │       ├── config.py          # AppConfig and load_config (reads settings.yaml / ETB_CONFIG)
-│       ├── main.py            # Entry point: load PDF, build retriever, run single-query mode or LangGraph-based interactive loop
-│       ├── models.py          # LLM and embedding helpers (Ollama, OpenAI)
+│       ├── main.py            # Entry point: build dual vector retrieval (text+captions), run single-query mode or LangGraph interactive loop
+│       ├── models.py          # LLM and embedding helpers; Ollama embeddings wrapped for FAISS (batch shape fix)
 │       ├── graph_rag.py       # LangGraph RAG graph (ingest_query → retrieve_rag → generate_answer, designed for future nodes)
 │       └── retrieval/
-│           ├── __init__.py    # Re-exports load_pdf, process_documents, split_documents, store_documents
+│           ├── __init__.py    # Re-exports retrieval helpers and DualRetriever adapter
 │           ├── loader.py     # load_pdf (PyPDFLoader)
-│           └── process.py    # split_documents, store_documents, process_documents, FAISS
+│           ├── process.py    # split_documents, store_documents (pre-stacked embeddings → FAISS), dual index builders
+│           └── dual_retriever.py # Single-query adapter that merges text/caption retrieval results
 ├── tools/                     # Utilities and side projects (not installed)
 │   └── data_generation/
 ├── tests/
 │   ├── test_config.py
 │   ├── test_main.py
+│   ├── test_models.py
 │   └── test_retrieval_process.py
 ├── docs/
 │   ├── README.md

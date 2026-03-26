@@ -7,9 +7,12 @@ from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 
 from etb_project.retrieval.process import (
+    build_two_vectorstores,
     embed_documents,
     embed_query,
     process_documents,
+    process_pdf_to_vectorstores,
+    process_prechunked_documents,
     split_documents,
     store_documents,
 )
@@ -61,6 +64,18 @@ def test_store_documents_builds_vectorstore(
     assert hasattr(vs, "index")
 
 
+def test_store_documents_handles_flat_single_embedding(
+    sample_documents: list[Document],
+) -> None:
+    """Single-doc flat vector from embed_documents is stacked for FAISS."""
+    one_doc = [sample_documents[0]]
+    mock_embeddings = MagicMock(spec=Embeddings)
+    mock_embeddings.embed_query.return_value = [0.0] * 8
+    mock_embeddings.embed_documents.return_value = [0.0] * 8
+    vs = store_documents(one_doc, mock_embeddings)
+    assert vs.index.ntotal == 1
+
+
 def test_process_documents_returns_vectorstore(
     sample_documents: list[Document],
 ) -> None:
@@ -104,3 +119,97 @@ def test_embed_documents_returns_list_of_vectors(
     assert all(
         isinstance(v, list) and all(isinstance(x, float) for x in v) for v in result
     )
+
+
+def test_process_prechunked_documents_uses_store_documents(
+    sample_documents: list[Document],
+) -> None:
+    """process_prechunked_documents delegates to store_documents with default embeddings."""
+    with patch("etb_project.retrieval.process.get_embedding_model") as mock_get_emb:
+        mock_emb = MagicMock(spec=Embeddings)
+        mock_emb.embed_query.return_value = [0.0] * 8
+        mock_get_emb.return_value = mock_emb
+
+        with patch("etb_project.retrieval.process.store_documents") as mock_store:
+            mock_vectorstore = MagicMock()
+            mock_store.return_value = mock_vectorstore
+
+            result = process_prechunked_documents(sample_documents)
+
+    mock_get_emb.assert_called_once()
+    mock_store.assert_called_once_with(sample_documents, mock_emb)
+    assert result is mock_vectorstore
+
+
+def test_build_two_vectorstores_builds_both_stores_when_captions_present() -> None:
+    """build_two_vectorstores calls process_prechunked_documents for both doc sets."""
+    text_docs = [Document(page_content="text", metadata={})]
+    caption_docs = [Document(page_content="Image caption: x", metadata={})]
+
+    fake_text_vs = MagicMock()
+    fake_caption_vs = MagicMock()
+
+    with patch(
+        "etb_project.retrieval.process.process_prechunked_documents",
+        side_effect=[fake_text_vs, fake_caption_vs],
+    ) as mock_process_prechunked:
+        text_vs, caption_vs = build_two_vectorstores(text_docs, caption_docs)
+
+    assert text_vs is fake_text_vs
+    assert caption_vs is fake_caption_vs
+    assert mock_process_prechunked.call_count == 2
+    mock_process_prechunked.assert_any_call(text_docs)
+    mock_process_prechunked.assert_any_call(caption_docs)
+
+
+def test_build_two_vectorstores_uses_empty_store_when_captions_empty() -> None:
+    """build_two_vectorstores returns an empty captions store when no caption docs exist."""
+    text_docs = [Document(page_content="text", metadata={})]
+    caption_docs: list[Document] = []
+
+    fake_text_vs = MagicMock()
+    fake_caption_vs = MagicMock()
+
+    with (
+        patch(
+            "etb_project.retrieval.process.process_prechunked_documents",
+            side_effect=[fake_text_vs, fake_caption_vs],
+        ) as mock_process_prechunked,
+    ):
+        text_vs, caption_vs = build_two_vectorstores(text_docs, caption_docs)
+
+    assert text_vs is fake_text_vs
+    assert caption_vs is fake_caption_vs
+    assert mock_process_prechunked.call_count == 2
+    mock_process_prechunked.assert_any_call(text_docs)
+    mock_process_prechunked.assert_any_call(caption_docs)
+
+
+def test_process_pdf_to_vectorstores_delegates_to_dual_builder() -> None:
+    """process_pdf_to_vectorstores delegates extraction + building to helper functions."""
+    fake_text_docs = [Document(page_content="text", metadata={})]
+    fake_caption_docs = [Document(page_content="Image caption: x", metadata={})]
+    fake_text_vs = MagicMock()
+    fake_caption_vs = MagicMock()
+
+    with (
+        patch(
+            "etb_project.retrieval.process.process_pdf_to_text_and_caption_docs",
+            return_value=(fake_text_docs, fake_caption_docs),
+        ) as mock_extract,
+        patch(
+            "etb_project.retrieval.process.build_two_vectorstores",
+            return_value=(fake_text_vs, fake_caption_vs),
+        ) as mock_build,
+    ):
+        result_text_vs, result_caption_vs = process_pdf_to_vectorstores(
+            pdf_path="input.pdf",
+            output_dir="out",
+            chunking_config=None,
+            image_captioner=None,
+        )
+
+    assert result_text_vs is fake_text_vs
+    assert result_caption_vs is fake_caption_vs
+    mock_extract.assert_called_once()
+    mock_build.assert_called_once_with(fake_text_docs, fake_caption_docs)

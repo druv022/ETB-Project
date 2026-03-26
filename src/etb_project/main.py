@@ -8,8 +8,10 @@ from langchain_core.messages import AIMessage
 
 from etb_project.config import load_config
 from etb_project.graph_rag import build_rag_graph
+from etb_project.models import get_ollama_embedding_model as get_embeddings
 from etb_project.models import get_ollama_llm as get_llm
-from etb_project.retrieval import load_pdf, process_documents
+from etb_project.retrieval import DualRetriever
+from etb_project.vectorstore.faiss_backend import FaissDualVectorStoreBackend
 
 # Configure logging (level applied after config load in main())
 logging.basicConfig(
@@ -43,22 +45,65 @@ def _get_agent_reply(state: dict[str, Any]) -> str:
 
 
 def main() -> None:
-    """Load config, build retriever from PDF, run query or interactive loop."""
+    """Load config, load persisted dual vector DB, run query or loop."""
     config = load_config()
     logging.getLogger().setLevel(getattr(logging, config.log_level, logging.INFO))
     logger.info("Starting ETB-project")
 
-    pdf_path = config.pdf
-    if not pdf_path or not Path(pdf_path).exists():
+    vector_store_path = config.vector_store_path
+    if not vector_store_path:
         logger.error(
-            "Set a valid 'pdf' path in src/config/settings.yaml or ETB_CONFIG."
+            "Set 'vector_store_path' in src/config/settings.yaml or ETB_CONFIG."
         )
         raise SystemExit(1)
 
-    logger.info("Loading PDF and building vector store...")
-    docs = load_pdf(pdf_path)
-    vectorstore = process_documents(docs)
-    retriever = vectorstore.as_retriever(search_kwargs={"k": config.retriever_k})
+    vector_store_root = Path(vector_store_path)
+    backend_name = getattr(config, "vector_store_backend", "faiss")
+    if backend_name != "faiss":
+        raise SystemExit(
+            f"Unsupported vector store backend: {backend_name}. Only 'faiss' is implemented."
+        )
+
+    backend = FaissDualVectorStoreBackend()
+    if not backend.is_ready(vector_store_root):
+        pdf_path = config.pdf
+        if not pdf_path or not Path(pdf_path).exists():
+            logger.error(
+                "Vector index not found, and 'pdf' is not configured or missing. "
+                "Set a valid 'pdf' path in src/config/settings.yaml or ETB_CONFIG."
+            )
+            raise SystemExit(1)
+
+        logger.error(
+            "Vector index not found or incomplete at: %s\n"
+            "Build it with:\n"
+            "  python -m etb_project.document_processor_cli "
+            "--pdf %s --output-dir ./document_output "
+            "--persist-index --vector-store-dir %s",
+            vector_store_root,
+            pdf_path,
+            vector_store_root,
+        )
+        raise SystemExit(1)
+
+    logger.info("Loading persisted text + caption vector stores...")
+    embeddings = get_embeddings()
+    text_vectorstore, caption_vectorstore = backend.load(
+        vector_store_root, embeddings=embeddings
+    )
+
+    text_retriever = text_vectorstore.as_retriever(
+        search_kwargs={"k": config.retriever_k}
+    )
+    caption_retriever = caption_vectorstore.as_retriever(
+        search_kwargs={"k": config.retriever_k}
+    )
+    retriever = DualRetriever(
+        text_retriever=text_retriever,
+        caption_retriever=caption_retriever,
+        k_total=config.retriever_k,
+    )
+    logger.info("Dual vector retrieval active (text + captions)")
     logger.info("Application started successfully")
 
     if config.query.strip():
