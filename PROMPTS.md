@@ -58,3 +58,11 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-03-20 12:21:41 CDT**: `Store every artifical created under src/ codebase in the folder data folder with respective naming convention. Make this changes throughout the src code. Test only in conda etb env` (Context: route artifact outputs (vector index + extracted docs/images) under project `data/` directory and update docs/tests accordingly.)
 
 - **2026-03-20**: `fix it.` (Context: wrap Ollama embeddings so single-document `embed_documents` output is always 2D for LangChain FAISS; fix `ValueError: not enough values to unpack (expected 2, got 1)` at `faiss.index.add`)
+
+- **2026-03-25**: `Implement the plan as specified` (OpenAI SDK image captioning refactor: `ChatCompletionImageCaptioner`, `OpenAIImageCaptioner`, config `openai_image_caption_model`, CLI precedence, tests; README/PROMPTS updates.)
+
+- **2026-03-25**: `use openouter api with openapi backend for testing` (Context: default `tools/test_image_captioning.py` to `--backend openrouter`, document OpenRouter + OpenAI Python SDK; preflight `OPENROUTER_API_KEY` / `OPENAI_API_KEY`; README Tools update.)
+
+- **2026-03-26**: `remove any extraneous information from the parent README.md file other than keeping the basic information and usage example. All additional description for each of the feature can be moved to separate markdown file in the docs folder. Be as descriptive as possible in the docs folder but remove extra information from the main README.md file.` (Context: restructure root README into a brief entry point and move detailed feature documentation into `docs/` pages.)
+
+- **2026-03-26**: `README → docs re-organization plan Implement the plan as specified, it is attached for your reference. Do NOT edit the plan file itself.` (Context: create a docs IA under `docs/`, migrate detailed README content into dedicated pages, and slim the root README to an entry point with links.)

@@ -2,7 +2,9 @@
 
 ## Overview
 
-ETB-project is built with a modular, scalable architecture following Python best practices.
+ETB-project separates **index building** (document processing + persisted vector stores) from **runtime querying** (load persisted indices and run RAG). This keeps the main application fast and repeatable: you rebuild/update indices only when the underlying documents change.
+
+For operational “how-to” instructions, see the guides in [`docs/README.md`](README.md).
 
 ## Project Structure
 
@@ -10,16 +12,17 @@ ETB-project is built with a modular, scalable architecture following Python best
 etb_project/
 ├── src/
 │   ├── config/
-│   │   └── settings.yaml        # Default config file (pdf, query, retriever_k, log_level)
+│   │   └── settings.yaml        # App config (pdf/query/retriever_k/log_level/vector_store_path + captioning models)
 │   └── etb_project/
 │       ├── __init__.py
 │       ├── config.py            # AppConfig, load_config (reads settings.yaml or ETB_CONFIG)
-│       ├── main.py              # Entry point: load PDF, build retriever, query or interactive loop
-│       ├── models.py            # LLM and embedding helpers (Ollama, OpenAI)
-│       └── retrieval/
-│           ├── __init__.py      # Re-exports load_pdf, process_documents, split_documents, store_documents
-│           ├── loader.py        # load_pdf (PyPDFLoader)
-│           └── process.py       # split_documents, store_documents, process_documents (FAISS)
+│       ├── main.py              # Entry point: load persisted indices; single-query or interactive RAG loop
+│       ├── models.py            # LLM and embedding helpers
+│       ├── graph_rag.py         # LangGraph RAG graph (ingest_query → retrieve_rag → generate_answer)
+│       ├── document_processor_cli.py  # CLI for extraction/chunking/indexing/persistence
+│       ├── document_processing/ # PDF extraction, chunking, and optional image captioning
+│       ├── retrieval/           # Retrieval adapters and orchestration (including dual retrieval)
+│       └── vectorstore/         # Vector store backends + indexing service (persist/load)
 ├── tools/                       # Utilities and side projects (not installed)
 │   └── data_generation/
 ├── tests/                       # test_config, test_main, test_retrieval_process
@@ -29,7 +32,7 @@ etb_project/
 
 ### Tools and utilities
 
-Code under `tools/` is **not** part of the installed package. Only `src/etb_project/` is packaged and installed. The `tools/` directory holds development and one-off utilities (e.g. data generation) that are run from the repo with `PYTHONPATH=. python -m tools.data_generation` or by executing scripts under `tools/` directly.
+Code under `tools/` is **not** part of the installed package. Only `src/etb_project/` is packaged and installed. The `tools/` directory holds development and one-off utilities (e.g. data generation, standalone captioning) that are run from the repo. See [`TOOLS.md`](TOOLS.md).
 
 ## Design Principles
 
@@ -61,7 +64,7 @@ The main application entry point is in `src/etb_project/main.py`. This module:
 
 - Loads configuration from `src/config/settings.yaml` (or `ETB_CONFIG` path)
 - Sets log level from config
-- Loads the configured PDF, builds a FAISS vector store, and creates a retriever
+- Loads persisted vector indices from `vector_store_path`
 - Runs a single query if `config.query` is set, otherwise enters an interactive query loop
 
 ### RAG pipeline
@@ -69,117 +72,48 @@ The main application entry point is in `src/etb_project/main.py`. This module:
 ```mermaid
 flowchart LR
   Config[Config] --> Main[main]
-  Main --> LoadPDF[load_pdf]
-  LoadPDF --> ProcessDocs[process_documents]
-  ProcessDocs --> Retriever[faiss_retriever]
+  Main --> LoadIndex[load_persisted_indices]
+  LoadIndex --> Retriever[DualRetriever]
   Main --> LangGraphRAG["LangGraph RAG graph"]
   Retriever --> LangGraphRAG
   LangGraphRAG --> LLMAnswer["LLM answer"]
 ```
 
-- **Config** (`etb_project.config`): `AppConfig` holds `pdf`, `query`, `retriever_k`, `log_level`. Loaded from YAML or `ETB_CONFIG`.
-- **load_pdf** (`etb_project.retrieval.loader`): Loads PDF pages (and optional image extraction) into LangChain `Document` list.
-- **process_documents** (`etb_project.retrieval.process`): Splits documents with `RecursiveCharacterTextSplitter`, embeds with Ollama, stores in FAISS.
-- **retriever**: FAISS vector store exposed as a retriever.
-- **LangGraph RAG graph** (`etb_project.graph_rag`): Orchestrates `ingest_query → retrieve_rag → generate_answer`, calling the LLM with retrieved context to produce the final answer in interactive mode.
+- **Config** (`etb_project.config`): `AppConfig` holds runtime keys like `pdf`, `query`, `retriever_k`, `log_level`, and paths like `vector_store_path`.
+- **Index load** (`etb_project.vectorstore`): loads the persisted vector indices that were built during document processing.
+- **Retriever** (`etb_project.retrieval.dual_retriever.DualRetriever`): merges/de-duplicates results from the text index and caption index.
+- **LangGraph RAG graph** (`etb_project.graph_rag`): orchestrates `ingest_query → retrieve_rag → generate_answer`.
 
-### Configuration Management
+### Index building (offline step)
 
-Configuration is managed through:
+Index building is a separate workflow (CLI or programmatic) that:
 
-- Environment variables (`.env` file)
-- Configuration classes
-- Type-safe configuration loading
+- extracts text and images from PDFs
+- writes artifacts (`pages.json`, `chunks.jsonl`, `images/`)
+- optionally captions images
+- builds/persists vector indices
 
-### Error Handling
+This is intentionally separated from runtime querying so that `main` can stay load-only.
 
-- Custom exception classes
-- Structured error responses
-- Comprehensive logging
-- Graceful error recovery
+See:
 
-### Logging
+- [`DOCUMENT_PROCESSING.md`](DOCUMENT_PROCESSING.md)
+- [`CLI_REFERENCE.md`](CLI_REFERENCE.md)
+- [`IMAGE_CAPTIONING.md`](IMAGE_CAPTIONING.md)
 
-- Structured logging with appropriate levels
-- Configurable log formats
-- Log rotation and retention policies
+## Development and operations
 
-## Development Workflow
+The development workflow, linting/type-checking, and Docker usage are documented separately:
 
-### Code Quality Tools
+- [`DEVELOPMENT.md`](DEVELOPMENT.md)
 
-- **Black**: Code formatting
-- **Ruff**: Fast Python linter
-- **MyPy**: Static type checking
-- **Pytest**: Testing framework
-- **Pre-commit**: Git hooks for quality checks
+## Related docs
 
-### CI/CD Pipeline
-
-The CI/CD pipeline includes:
-
-1. **Linting**: Code style and quality checks
-2. **Testing**: Automated test execution
-3. **Security**: Dependency and code scanning
-4. **Build**: Package building and validation
-5. **Release**: Automated releases on tags
-
-## Dependencies
-
-### Production Dependencies
-
-- Core Python libraries
-- Framework-specific dependencies (if applicable)
-
-### Development Dependencies
-
-- Testing: pytest, pytest-cov, pytest-mock
-- Code Quality: black, ruff, mypy
-- Security: bandit, safety
-- Pre-commit hooks
-
-## Deployment
-
-### Docker
-
-The project includes Docker support:
-
-- Multi-stage builds for optimization
-- Non-root user for security
-- Health checks
-- Environment variable configuration
-
-### Environment Variables
-
-Key environment variables:
-
-- `DEBUG`: Enable debug mode
-- `SECRET_KEY`: Application secret key
-- `ENVIRONMENT`: Deployment environment
-- `LOG_LEVEL`: Logging level
-
-## Security Considerations
-
-- No secrets in code or version control
-- Dependency vulnerability scanning
-- Security linting with Bandit
-- Regular dependency updates
-- Input validation and sanitization
-
-## Performance
-
-- Efficient algorithms and data structures
-- Caching strategies where appropriate
-- Database query optimization
-- Resource pooling
-
-## Future Enhancements
-
-- [ ] Add API documentation with OpenAPI/Swagger
-- [ ] Implement caching layer
-- [ ] Add monitoring and observability
-- [ ] Expand test coverage
-- [ ] Performance optimization
+- [`USAGE.md`](USAGE.md)
+- [`CONFIGURATION.md`](CONFIGURATION.md)
+- [`DOCUMENT_PROCESSING.md`](DOCUMENT_PROCESSING.md)
+- [`IMAGE_CAPTIONING.md`](IMAGE_CAPTIONING.md)
+- [`TOOLS.md`](TOOLS.md)
 
 ## References
 
