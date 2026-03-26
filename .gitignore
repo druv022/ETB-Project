@@ -143,3 +143,8 @@ logs/
 tools/data_generation/Transaction_data/transaction_database_5yrs_full.sql
 
 framework/*
+data/*
+src/document_output/*
+.langgraph_api/*
+tools/data_generation/report_generation/output/*
+_pydeps/*
