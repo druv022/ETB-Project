@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from etb_project.ui.asset_paths import (
     asset_request_headers,
     derive_asset_path_from_stored_path,
+    display_name_for_source_file,
 )
 
 load_dotenv()
@@ -208,7 +209,7 @@ def _format_source_header(i: int, meta: dict[str, Any]) -> str:
 
     filename = "unknown"
     if isinstance(source, str) and source.strip():
-        filename = Path(source).name
+        filename = display_name_for_source_file(source.strip()) or "unknown"
 
     parts: list[str] = [f"**{i}. {filename}**"]
     if isinstance(page, int):

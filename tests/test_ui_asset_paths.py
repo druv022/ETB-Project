@@ -7,6 +7,7 @@ import pytest
 from etb_project.ui.asset_paths import (
     asset_request_headers,
     derive_asset_path_from_stored_path,
+    display_name_for_source_file,
 )
 
 
@@ -23,6 +24,28 @@ def test_derive_asset_path_nested_pdf_stem() -> None:
 def test_derive_asset_path_windows_backslashes() -> None:
     p = r"C:\proj\data\document_output\images\a.png"
     assert derive_asset_path_from_stored_path(p) == "images/a.png"
+
+
+def test_display_name_strips_upload_uuid_prefix() -> None:
+    assert (
+        display_name_for_source_file(
+            "f411370fd13b44fbb0c18db63207e351_pdf_with_image.pdf"
+        )
+        == "pdf_with_image.pdf"
+    )
+
+
+def test_display_name_strips_prefix_from_full_path() -> None:
+    p = "/data/uploads/f411370fd13b44fbb0c18db63207e351_My Doc.pdf"
+    assert display_name_for_source_file(p) == "My Doc.pdf"
+
+
+def test_display_name_unchanged_without_prefix() -> None:
+    assert display_name_for_source_file("chapter1.pdf") == "chapter1.pdf"
+
+
+def test_display_name_empty() -> None:
+    assert display_name_for_source_file("") == ""
 
 
 def test_derive_asset_path_returns_none_for_garbage() -> None:

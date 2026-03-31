@@ -120,3 +120,5 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-03-31**: `Fix image rendering after Docker deploy` (Context: implement plan — `asset_path` relative to top-level `ETB_DOCUMENT_OUTPUT_DIR` when indexing multiple PDFs; Docker `ETB_DOCUMENT_OUTPUT_DIR`/`ETB_UPLOAD_DIR`; UI derives asset paths from stored absolute paths, forwards bearer token for `/v1/assets`, tests and docs.)
 
 - **2026-03-31**: `use conda etb environment` (Context: document the **`ETB`** conda env in README; run pytest with `conda run -n ETB`; fix `_serialize_metadata` to use `_json_safe` so nested `image_captions` stay JSON-shaped for the retriever API test.)
+
+- **2026-03-31**: `The source name is confusing: 1. f411370fd13b44fbb0c18db63207e351_pdf_with_image.pdf • p.1/1 — Provide only the necessary information. The first part is unnecessary for the user.` (Context: add `display_name_for_source_file` in `ui/asset_paths.py` to strip retriever upload prefix `{uuid.hex}_`; use in Streamlit `_format_source_header`; tests in `test_ui_asset_paths.py`.)

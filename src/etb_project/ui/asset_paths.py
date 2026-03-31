@@ -3,13 +3,34 @@
 from __future__ import annotations
 
 import os
+import re
+from pathlib import Path
 from typing import Final
+
+# Retriever saves uploads as ``{uuid.uuid4().hex}_{original_filename}`` (see ``api/app.py``).
+_UPLOAD_UUID_PREFIX: Final[re.Pattern[str]] = re.compile(
+    r"^[0-9a-f]{32}_", flags=re.IGNORECASE
+)
 
 _MARKERS: Final[tuple[str, ...]] = (
     "document_output/",
     "document_output\\",
     "/document_output/",
 )
+
+
+def display_name_for_source_file(path_or_name: str) -> str:
+    """Basename for UI labels: drop upload prefix ``<32-hex>_<original>.pdf``.
+
+    Absolute paths and bare filenames are accepted. If stripping would yield an
+    empty string, the original basename is returned.
+    """
+    raw = (path_or_name or "").strip()
+    if not raw:
+        return ""
+    name = Path(raw).name
+    stripped = _UPLOAD_UUID_PREFIX.sub("", name, count=1)
+    return stripped if stripped else name
 
 
 def asset_request_headers() -> dict[str, str]:
