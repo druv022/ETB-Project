@@ -37,11 +37,38 @@ pip install -e .
 
 1) Configure `src/config/settings.yaml` (or set `ETB_CONFIG` to an alternate YAML).
 
-2) Run the app:
+2) Run the RAG app (local FAISS):
 
 ```bash
 python -m etb_project.main
 make run
+```
+
+### Standalone retriever API (recommended for Docker deployments)
+
+This repo now includes a **standalone retriever HTTP API** (retrieve chunks + index PDFs). The **LangGraph RAG** graph stays outside of the retriever.
+
+- **Start retriever + embeddings with Docker**:
+
+```bash
+docker compose up --build
+```
+
+Compose starts **Ollama** (pulls the embedding model automatically), then the **retriever** once Ollama is healthy.
+
+- **Check health**:
+
+```bash
+curl http://localhost:8000/v1/health
+curl http://localhost:8000/v1/ready
+```
+
+- **Use the RAG orchestrator against the retriever**:
+
+```bash
+export ETB_RETRIEVER_MODE=remote
+export RETRIEVER_BASE_URL=http://localhost:8000
+python -m etb_project.main
 ```
 
 If you need to build/update the persisted indices first (PDF preprocessing, chunking, optional captioning), see the docs below.
@@ -72,6 +99,7 @@ etb_project/
 │       ├── main.py            # Entry point: load persisted indices, run single-query or interactive RAG loop
 │       ├── models.py          # LLM and embedding helpers
 │       ├── graph_rag.py       # LangGraph RAG graph (ingest_query → retrieve_rag → generate_answer)
+│       ├── api/               # Standalone retriever HTTP API (no RAG graph)
 │       └── retrieval/
 │           ├── __init__.py    # Re-exports retrieval helpers and DualRetriever adapter
 │           ├── loader.py     # load_pdf (PyPDFLoader)

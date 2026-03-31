@@ -9,6 +9,7 @@ from langchain_core.embeddings import Embeddings
 from etb_project.models import (
     FaissCompatibleEmbeddings,
     _normalize_embed_documents_for_faiss,
+    get_ollama_embedding_model,
 )
 
 
@@ -57,6 +58,25 @@ def test_normalize_invalid_ndarray_raises() -> None:
 def test_normalize_non_list_raises() -> None:
     with pytest.raises(TypeError, match="embed_documents must return"):
         _normalize_embed_documents_for_faiss("bad", 1)
+
+
+def test_get_ollama_embedding_model_uses_ollama_host_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OLLAMA_HOST", "http://ollama:11434")
+    monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
+    emb = get_ollama_embedding_model()
+    inner = emb._inner
+    assert inner.base_url == "http://ollama:11434"
+
+
+def test_get_ollama_embedding_model_ollama_host_overrides_base_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OLLAMA_HOST", "http://preferred:11434")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://ignored:11434")
+    emb = get_ollama_embedding_model()
+    assert emb._inner.base_url == "http://preferred:11434"
 
 
 def test_faiss_compatible_embeddings_wraps_inner() -> None:

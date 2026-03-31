@@ -92,3 +92,7 @@ This file logs all prompts given to the AI agent for this project.
 
 - **2026-03-26**: Fix Bandit noise/failures by excluding `.venv` (and other build/venv caches) from Bandit scans in both pre-commit and GitHub Actions, preventing third-party site-packages findings from failing CI.
 - **2026-03-26 11:58:20 EDT**: `Fix the issue: Run pytest tests/ -v --cov=etb_project --cov-report=term-missing --cov-report=html --cov-report=xml ...` (Context: fix Windows path separator mismatch in vectorstore manifest `pdf_path` during append/persist flow causing two CI test failures.)
+
+- **2026-03-31 00:00:00 EDT**: `Implement the standalone retriever API plan (FastAPI + Docker), keep LangGraph RAG outside the retriever, add indexing/upload + retrieve endpoints, add error codes, tests, and documentation.` (Context: migrate integrated retrieval to a standalone API deployable via Docker Compose, plus a remote retriever client mode for the orchestrator.)
+
+- **2026-03-31 00:00:00 EDT**: `fix the error in the docker file itself instead of manual intervention.` (Context: docker-compose + Dockerfile: OLLAMA_HOST, auto-pull embedding model, healthcheck, models.py base_url from env.)

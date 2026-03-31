@@ -1,6 +1,7 @@
 """Main entry point for ETB-project."""
 
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +11,7 @@ from etb_project.config import load_config
 from etb_project.graph_rag import build_rag_graph
 from etb_project.models import get_ollama_embedding_model as get_embeddings
 from etb_project.models import get_ollama_llm as get_llm
-from etb_project.retrieval import DualRetriever
+from etb_project.retrieval import DualRetriever, RemoteRetriever
 from etb_project.vectorstore.faiss_backend import FaissDualVectorStoreBackend
 
 # Configure logging (level applied after config load in main())
@@ -44,12 +45,8 @@ def _get_agent_reply(state: dict[str, Any]) -> str:
     return ""
 
 
-def main() -> None:
-    """Load config, load persisted dual vector DB, run query or loop."""
-    config = load_config()
-    logging.getLogger().setLevel(getattr(logging, config.log_level, logging.INFO))
-    logger.info("Starting ETB-project")
-
+def _build_local_retriever(config: Any) -> DualRetriever:
+    """Load persisted dual FAISS and return a ``DualRetriever``."""
     vector_store_path = config.vector_store_path
     if not vector_store_path:
         logger.error(
@@ -98,12 +95,38 @@ def main() -> None:
     caption_retriever = caption_vectorstore.as_retriever(
         search_kwargs={"k": config.retriever_k}
     )
-    retriever = DualRetriever(
+    return DualRetriever(
         text_retriever=text_retriever,
         caption_retriever=caption_retriever,
         k_total=config.retriever_k,
     )
-    logger.info("Dual vector retrieval active (text + captions)")
+
+
+def main() -> None:
+    """Load config, load persisted dual vector DB, run query or loop."""
+    config = load_config()
+    logging.getLogger().setLevel(getattr(logging, config.log_level, logging.INFO))
+    logger.info("Starting ETB-project")
+
+    mode = os.environ.get("ETB_RETRIEVER_MODE", "local").strip().lower()
+    if mode == "remote":
+        base = os.environ.get("RETRIEVER_BASE_URL", "").strip().rstrip("/")
+        if not base:
+            logger.error(
+                "ETB_RETRIEVER_MODE=remote requires RETRIEVER_BASE_URL "
+                "(e.g. http://localhost:8000)."
+            )
+            raise SystemExit(1)
+        timeout_s = float(os.environ.get("RETRIEVER_TIMEOUT_S", "60"))
+        retriever: Any = RemoteRetriever(
+            base,
+            k=config.retriever_k,
+            timeout_s=timeout_s,
+        )
+        logger.info("Using remote retriever at %s", base)
+    else:
+        retriever = _build_local_retriever(config)
+        logger.info("Dual vector retrieval active (text + captions)")
     logger.info("Application started successfully")
 
     if config.query.strip():

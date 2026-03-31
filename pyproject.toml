@@ -23,6 +23,9 @@ classifiers = [
 ]
 
 dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "python-multipart>=0.0.9",
     "pydantic>=2.5",
     "PyYAML>=6.0",
     "types-PyYAML>=6.0",
