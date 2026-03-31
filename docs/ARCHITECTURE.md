@@ -11,61 +11,51 @@ This keeps the RAG layer flexible while the retriever can be deployed/scaled as 
 
 For operational “how-to” instructions, see the guides in [`docs/README.md`](README.md).
 
-## Project Structure
+## Project structure
+
+Repository layout (paths relative to repo root):
 
 ```
 ETB-Project/
-├── app.py                      # Streamlit UI (calls orchestrator)
-├── docker-compose.yml          # UI + orchestrator + retriever (+ Ollama)
-etb_project/
+├── app.py                      # Streamlit UI → Orchestrator `POST /v1/chat`
+├── docker-compose.yml          # UI + orchestrator + retriever + Ollama
+├── Dockerfile
+├── Makefile
+├── pyproject.toml
+├── requirements.txt
+├── requirements-dev.txt
 ├── src/
 │   ├── config/
-│   │   └── settings.yaml        # App config (pdf/query/retriever_k/log_level/vector_store_path + captioning models)
-│   └── etb_project/
-│       ├── __init__.py
-│       ├── config.py            # AppConfig, load_config (reads settings.yaml or ETB_CONFIG)
-│       ├── main.py              # Entry point: load persisted indices; single-query or interactive RAG loop
-│       ├── models.py            # LLM and embedding helpers
-│       ├── graph_rag.py         # LangGraph RAG graph (ingest_query → retrieve_rag → generate_answer)
-│       ├── api/                 # Standalone retriever HTTP API (no RAG graph)
-│       ├── document_processor_cli.py  # CLI for extraction/chunking/indexing/persistence
-│       ├── document_processing/ # PDF extraction, chunking, and optional image captioning
-│       ├── retrieval/           # Retrieval adapters and orchestration (including dual retrieval)
-│       └── vectorstore/         # Vector store backends + indexing service (persist/load)
-├── tools/                       # Utilities and side projects (not installed)
+│   │   └── settings.yaml       # Primary YAML (override with ETB_CONFIG)
+│   └── etb_project/            # Installed package (`pip install -e .`)
+│       ├── config.py           # AppConfig, load_config
+│       ├── main.py             # CLI RAG (local or remote retriever)
+│       ├── models.py           # LLM + embedding helpers
+│       ├── graph_rag.py        # LangGraph RAG graph
+│       ├── api/                # Retriever FastAPI (retrieve, index, assets)
+│       ├── orchestrator/       # Orchestrator FastAPI (chat, asset proxy)
+│       ├── ui/                 # Shared UI helpers (asset paths, headers)
+│       ├── document_processing/
+│       ├── document_processor_cli.py
+│       ├── retrieval/          # Dual retriever + RemoteRetriever client
+│       └── vectorstore/        # FAISS backends + indexing service
+├── tools/                      # Not installed with the package
 │   └── data_generation/
-├── tests/                       # test_config, test_main, test_retrieval_process
-├── docs/
-├── data/                       # Persisted artifacts (uploads, outputs, vector indices)
-├── tools/                      # Utilities and side projects (not installed)
 ├── tests/
-└── src/
-    ├── config/
-    │   └── settings.yaml
-    └── etb_project/
-        ├── api/                # Retriever API (indexing + retrieve; no RAG graph)
-        ├── orchestrator/       # Orchestrator API (chat; runs LangGraph RAG)
-        ├── retrieval/          # Dual/local + remote retriever client
-        ├── vectorstore/        # FAISS persistence/indexing backends
-        ├── document_processing/
-        ├── document_processor_cli.py
-        ├── graph_rag.py
-        ├── main.py             # CLI RAG (local or remote retriever)
-        └── models.py           # Chat LLM provider selection + Ollama embeddings wrapper
+├── docs/
+└── data/                       # Uploads, document_output, vector indices (typical)
 ```
 
-### Tools and utilities
+Code under `tools/` is **not** part of the installed package. See [`TOOLS.md`](TOOLS.md).
 
-Code under `tools/` is **not** part of the installed package. Only `src/etb_project/` is packaged and installed. The `tools/` directory holds development and one-off utilities (e.g. data generation, standalone captioning) that are run from the repo. See [`TOOLS.md`](TOOLS.md).
-
-## Design Principles
+## Design principles
 
 ### 1. Modularity
 - Code is organized into logical modules
 - Each module has a single responsibility
 - Clear separation of concerns
 
-### 2. Type Safety
+### 2. Type safety
 - Type hints throughout the codebase
 - Static type checking with MyPy
 - Runtime type validation where needed
@@ -80,82 +70,76 @@ Code under `tools/` is **not** part of the installed package. Only `src/etb_proj
 - Stateless services where possible
 - Efficient resource usage
 
-## Core Components
+## Core components
 
-### Main Application
+### Main application (`etb_project.main`)
 
-The main application entry point is in `src/etb_project/main.py`. This module:
+- Loads configuration from `src/config/settings.yaml` (or `ETB_CONFIG`)
+- Uses **local** or **remote** retrieval via `ETB_RETRIEVER_MODE` and `RETRIEVER_BASE_URL`
+- If **`query`** is set: **retrieval only** (logs document snippets; no LangGraph, no LLM)
+- If **`query`** is empty: **interactive LangGraph** loop; chat LLM is **Ollama** via `get_ollama_llm()` (not `get_chat_llm()` / OpenRouter — those are used by the **Orchestrator API**)
 
-- Loads configuration from `src/config/settings.yaml` (or `ETB_CONFIG` path)
-- Sets log level from config
-- Uses **local** or **remote** retrieval (via `ETB_RETRIEVER_MODE`)
-- Runs a single query if `config.query` is set, otherwise enters an interactive query loop
+### Runtime services (Docker / production-style)
 
-### RAG pipeline
+```mermaid
+flowchart TB
+  UI[Streamlit app.py]
+  Orch[Orchestrator API :8001]
+  Ret[Retriever API :8000]
+  Ollama[Ollama embeddings]
+  RAG[LangGraph RAG in orchestrator]
+  LLM[Chat LLM]
+
+  UI -->|POST /v1/chat| Orch
+  UI -->|GET /v1/assets/... proxy| Orch
+  Orch --> RAG
+  RAG -->|POST /v1/retrieve| Ret
+  RAG --> LLM
+  Ret --> Ollama
+  Orch -->|GET /v1/assets/... forward| Ret
+```
+
+- **Orchestrator** (`etb_project.orchestrator`): session chat, LangGraph RAG, calls the retriever for context, proxies `GET /v1/assets/{path}` to the retriever for UI image/artifact bytes.
+- **Retriever** (`etb_project.api`): dual FAISS retrieval, PDF indexing, serves files from `ETB_DOCUMENT_OUTPUT_DIR` under `/v1/assets/...`.
+- **UI** (`app.py`): talks only to the orchestrator (chat + assets).
+
+### CLI / developer flow (no HTTP retriever)
 
 ```mermaid
 flowchart LR
-  UI[Streamlit UI] -->|POST /v1/chat| Orch[Orchestrator API]
-  Orch -->|POST /v1/retrieve| Ret[Retriever API]
-  Ret -->|embeddings| Ollama[Ollama]
-
-  Orch --> RAG["LangGraph RAG graph"]
-  Ret --> RAG
-  RAG --> LLM["Chat LLM (OpenAI-compatible or Ollama)"]
-  LLM --> Answer["Answer"]
-  Config[Config] --> Main[main]
-  Main --> Mode{retriever_mode}
-  Mode -->|local| LoadIndex[load_persisted_indices]
-  LoadIndex --> Retriever[DualRetriever]
-  Mode -->|remote| RetrieverAPI[Retriever_HTTP_API]
-  Main --> LangGraphRAG["LangGraph RAG graph"]
-  Retriever --> LangGraphRAG
-  RetrieverAPI --> LangGraphRAG
-  LangGraphRAG --> LLMAnswer["LLM answer"]
+  Config[AppConfig] --> Main[main.py]
+  Main --> Mode{ETB_RETRIEVER_MODE}
+  Mode -->|local| Load[Load FAISS from disk]
+  Mode -->|remote| Client[RemoteRetriever HTTP client]
+  Load --> Dual[DualRetriever]
+  Client --> Dual
+  Main --> Q{query set?}
+  Q -->|yes| Snip[Log retrieval snippets only]
+  Q -->|no| RAG2[LangGraph RAG]
+  RAG2 --> OllamaLLM[Ollama chat LLM]
 ```
 
-- **Config** (`etb_project.config`): `AppConfig` holds runtime keys like `pdf`, `query`, `retriever_k`, `log_level`, and paths like `vector_store_path`.
-- **Retriever API** (`etb_project.api`): indexing + retrieval endpoints; persists vector indices and serves retrieval.
-- **Remote retriever client** (`etb_project.retrieval.remote_retriever.RemoteRetriever`): orchestrator/CLI client for `POST /v1/retrieve`.
-- **LangGraph RAG graph** (`etb_project.graph_rag`): orchestrates `ingest_query → retrieve_rag → generate_answer`.
-- **UI** (`app.py`): sends chat messages to the orchestrator; renders answers and optional sources.
+- **Config** (`etb_project.config`): `AppConfig` — `pdf`, `query`, `retriever_k`, `log_level`, `vector_store_path`, captioning keys.
+- **Remote retriever client** (`etb_project.retrieval.remote_retriever.RemoteRetriever`): `POST /v1/retrieve` to the retriever service.
+- **LangGraph RAG** (`etb_project.graph_rag`): used only in **interactive** mode; paired with **Ollama** chat in `main`, not with `get_chat_llm()` (orchestrator uses `get_chat_llm()` for OpenAI-compat / OpenRouter).
 
-### Standalone retriever API (optional)
+### Standalone retriever API
 
-The retriever API exposes:
+Exposes:
 
-- `POST /v1/retrieve`: returns retrieved chunks (content + metadata)
-- `POST /v1/index/documents`: upload PDFs and update the persisted dual index
+- `GET /v1/health`, `GET /v1/ready`
+- `POST /v1/retrieve` — chunks with JSON-safe metadata (including nested fields like `image_captions`)
+- `POST /v1/index/documents` — multipart PDF upload; optional async job + `GET /v1/jobs/{job_id}`
+- `GET /v1/assets/{asset_path}` — files under `ETB_DOCUMENT_OUTPUT_DIR` (optional bearer auth)
 
-The RAG layer remains outside of this service. The orchestrator can switch to remote mode using:
-
-- `ETB_RETRIEVER_MODE=remote`
-- `RETRIEVER_BASE_URL=http://<host>:8000`
-
-### Standalone retriever API (optional)
-
-The retriever API exposes:
-
-- `POST /v1/retrieve`: returns retrieved chunks (content + metadata)
-- `POST /v1/index/documents`: upload PDFs and update the persisted dual index
-
-The RAG layer remains outside of this service. The orchestrator can switch to remote mode using:
+The RAG graph does **not** run inside this service. Point the orchestrator or CLI at it with:
 
 - `ETB_RETRIEVER_MODE=remote`
 - `RETRIEVER_BASE_URL=http://<host>:8000`
 
-### Index building (offline step)
+### Index building (offline / batch)
 
-Index building is a separate workflow (CLI or programmatic) that:
-
-- extracts text and images from PDFs
-- writes artifacts (`pages.json`, `chunks.jsonl`, `images/`)
-- optionally captions images
-- builds/persists vector indices
-
-This is intentionally separated from runtime querying so that `main` can stay load-only.
-
-See:
+Separate workflow (CLI or API) that extracts text/images, optional captioning, builds/persists vector indices. See:
 
 - [`DOCUMENT_PROCESSING.md`](DOCUMENT_PROCESSING.md)
 - [`CLI_REFERENCE.md`](CLI_REFERENCE.md)
@@ -163,14 +147,16 @@ See:
 
 ## Development and operations
 
-The development workflow, linting/type-checking, and Docker usage are documented separately:
-
 - [`DEVELOPMENT.md`](DEVELOPMENT.md)
 
 ## Related docs
 
-- [`USAGE.md`](USAGE.md)
+- [`README.md`](README.md) (index)
+- [`APP_RUN_MODES.md`](APP_RUN_MODES.md)
 - [`CONFIGURATION.md`](CONFIGURATION.md)
+- [`RETRIEVER_API.md`](RETRIEVER_API.md)
+- [`ORCHESTRATOR_API.md`](ORCHESTRATOR_API.md)
+- [`USAGE.md`](USAGE.md)
 - [`DOCUMENT_PROCESSING.md`](DOCUMENT_PROCESSING.md)
 - [`IMAGE_CAPTIONING.md`](IMAGE_CAPTIONING.md)
 - [`TOOLS.md`](TOOLS.md)

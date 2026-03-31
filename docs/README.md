@@ -6,9 +6,9 @@ This folder contains the detailed documentation for ETB-project. If you are new 
 
 At runtime (recommended), ETB runs as three services:
 
-- **UI** (`app.py`, Streamlit) → calls **Orchestrator API** `POST /v1/chat`
-- **Orchestrator API** (`src/etb_project/orchestrator/`, FastAPI) → runs LangGraph RAG and calls the retriever
-- **Retriever API** (`src/etb_project/api/`, FastAPI) → indexes PDFs + serves retrieval (no LLM answer generation)
+- **UI** (`app.py`, Streamlit) → **Orchestrator API** (`POST /v1/chat`, `GET /v1/assets/...` for images)
+- **Orchestrator API** (`src/etb_project/orchestrator/`, FastAPI) → LangGraph RAG, `POST /v1/retrieve` to the retriever, proxies assets from the retriever
+- **Retriever API** (`src/etb_project/api/`, FastAPI) → dual FAISS retrieval, PDF indexing, static files under `/v1/assets/...` (no LLM answer generation)
 
 Docker Compose starts all three (plus **Ollama** for embeddings).
 
@@ -21,7 +21,7 @@ Docker Compose starts all three (plus **Ollama** for embeddings).
 - [`CLI_REFERENCE.md`](CLI_REFERENCE.md): complete CLI flag reference for `python -m etb_project.document_processor_cli`.
 - [`IMAGE_CAPTIONING.md`](IMAGE_CAPTIONING.md): image captioning backends (OpenRouter/OpenAI/mock), config precedence, metadata flow.
 - [`RETRIEVER_API.md`](RETRIEVER_API.md): retriever service endpoints (health/ready/retrieve/index/jobs), auth, and error codes.
-- [`ORCHESTRATOR_API.md`](ORCHESTRATOR_API.md): orchestrator endpoints (health/ready/chat), LLM provider configuration, and session behavior.
+- [`ORCHESTRATOR_API.md`](ORCHESTRATOR_API.md): orchestrator endpoints (health/ready/chat/assets), `get_chat_llm()` providers (`ETB_LLM_PROVIDER`), sessions, CORS.
 
 ## Developer documentation
 

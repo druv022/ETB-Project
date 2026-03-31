@@ -23,9 +23,21 @@ Liveness check.
 
 Readiness check. Returns:
 
-- `ready`: whether required dependencies are configured
-- `retriever_base_url`: current retriever base URL
-- `llm_configured`: whether the chat LLM can be constructed from environment
+- `ready`: true when `RETRIEVER_BASE_URL` is set and the chat LLM can be constructed
+- `retriever_base_url`: current retriever base URL (or null)
+- `llm_configured`: whether `get_chat_llm()` succeeded at readiness check time
+
+#### `GET /v1/assets/{asset_path}`
+
+Proxies to the Retriever API’s `GET /v1/assets/{asset_path}` so the Streamlit UI only needs the orchestrator base URL. Forwards the incoming `Authorization` header when present (use the same bearer token as for the retriever when `RETRIEVER_API_KEY` is enabled).
+
+Typical errors:
+
+- `CONFIG_ERROR` (500): `RETRIEVER_BASE_URL` missing
+- `UNAUTHORIZED` (401): retriever rejected the token
+- `ASSET_NOT_FOUND` (404)
+- `RETRIEVER_UNREACHABLE` (502): HTTP client error reaching the retriever
+- `ASSET_PROXY_FAILED` (502): other retriever error responses
 
 #### `POST /v1/chat`
 
@@ -65,6 +77,10 @@ Service wiring:
   - Base URL for the Retriever API, e.g. `http://retriever:8000` in Docker Compose.
 - `ORCH_RETRIEVER_K`
   - Default top-k for retrieval (used when the request body does not specify `k`).
+- `ETB_ORCH_HOST`
+  - Bind address for `python -m etb_project.orchestrator` (default `0.0.0.0`).
+- `ETB_ORCH_PORT` or `PORT`
+  - Listen port (default `8001`).
 
 LLM provider selection:
 
@@ -101,3 +117,9 @@ Common codes:
 - `VALIDATION_ERROR` (422)
 - `CONFIG_ERROR` (500): missing `RETRIEVER_BASE_URL`
 - `EMPTY_ANSWER` (502)
+
+## Related docs
+
+- [`CONFIGURATION.md`](CONFIGURATION.md)
+- [`RETRIEVER_API.md`](RETRIEVER_API.md)
+- [`APP_RUN_MODES.md`](APP_RUN_MODES.md)

@@ -20,12 +20,18 @@ By participating in this project, you agree to maintain a respectful and inclusi
 python -m venv .venv
 source .venv/bin/activate
 
-# Install dependencies
+# Install dependencies (runtime + dev tools)
+pip install -r requirements.txt
 pip install -r requirements-dev.txt
+
+# Install the package in editable mode (required for tests and CLIs)
+pip install -e .
 
 # Install pre-commit hooks
 pre-commit install
 ```
+
+See [`DEVELOPMENT.md`](DEVELOPMENT.md) for tests, lint, and Docker.
 
 ## Making Changes
 

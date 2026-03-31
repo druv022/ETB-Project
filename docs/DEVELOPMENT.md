@@ -2,7 +2,7 @@
 
 This page contains development setup and day-to-day workflows (tests, linting, formatting, typing, pre-commit, Docker).
 
-For end-user usage, see [`USAGE.md`](USAGE.md).
+For end-user CLI behavior, see [`USAGE.md`](USAGE.md). For HTTP services, see [`APP_RUN_MODES.md`](APP_RUN_MODES.md).
 
 ## Setup
 
@@ -21,6 +21,12 @@ pip install -r requirements-dev.txt
 pip install -e .
 ```
 
+Equivalent using **optional** `uv` (if you use it; the repo may include `uv.lock`):
+
+```bash
+uv sync --all-extras   # or: uv pip install -e ".[dev]"
+```
+
 Install git hooks:
 
 ```bash
@@ -35,10 +41,10 @@ From project root, with the package importable (recommended: `pip install -e .`)
 
 ```bash
 # Run all tests
-pytest
+pytest tests/
 
-# Run with coverage
-pytest --cov=etb_project --cov-report=html
+# Run with coverage (matches Makefile / CI style)
+pytest tests/ -v --cov=etb_project --cov-report=term-missing --cov-report=html
 
 # Run a specific test file
 pytest tests/test_main.py
@@ -50,17 +56,25 @@ make test
 If you prefer not to use editable install:
 
 ```bash
-PYTHONPATH=src pytest
+PYTHONPATH=src pytest tests/
 ```
 
-### Conda environment (if you use it)
+### Conda (`ETB` environment)
 
-If you use Conda for this project, activate the env before installing and running tests:
+If you use Miniconda/Anaconda, the environment name in this project is typically **`ETB`**:
 
 ```bash
-conda activate etb
-pip install -e ".[dev]"
-pytest
+conda activate ETB
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+pip install -e .
+pytest tests/
+```
+
+One-shot without activating:
+
+```bash
+conda run -n ETB pytest tests/
 ```
 
 ## Code quality
@@ -98,10 +112,10 @@ pre-commit run --all-files
 # Build image
 docker build -t etb_project:latest .
 
-# Run container
-docker-compose up
+# Run stack (Compose v2)
+docker compose up --build
 
-# Or using make
+# Makefile targets call `docker-compose` (V1 CLI); use `docker compose` if you don't have the old binary
 make docker-build
 make docker-up
 ```
@@ -111,3 +125,4 @@ make docker-up
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`ARCHITECTURE.md`](ARCHITECTURE.md)
 - [`TOOLS.md`](TOOLS.md)
+- [`CONFIGURATION.md`](CONFIGURATION.md)
