@@ -58,6 +58,7 @@ python -m etb_project.document_processor_cli \
 Notes:
 
 - The `--pdf-dir` mode iterates `*.pdf` files and builds **one combined index**.
+- **`--build-faiss`** and **`--persist-index`** default to **enabled** in code; the examples above rely on those defaults (you can pass them explicitly for clarity).
 - If persistence is enabled and the vector store already exists, **new documents are appended** unless you reset the VDB (see below).
 
 ## After indexing: run the app (load-only)

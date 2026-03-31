@@ -46,6 +46,14 @@ def _ensure_output_root(output_root: Path) -> None:
     output_root.mkdir(parents=True, exist_ok=True)
 
 
+def _compute_asset_path(image_path: Path, asset_root: Path) -> str:
+    """Path relative to ``asset_root`` for HTTP ``GET /v1/assets/{asset_path}``."""
+    try:
+        return str(image_path.resolve().relative_to(asset_root.resolve()))
+    except ValueError:
+        return str(image_path)
+
+
 def _build_text_splitter(config: ChunkingConfig) -> RecursiveCharacterTextSplitter:
     return RecursiveCharacterTextSplitter(
         chunk_size=config.chunk_size,
@@ -75,9 +83,12 @@ def _serialize_pages_to_json(
     pages: list[Document],
     images_by_page: dict[int, list[ExtractedImageInfo]],
     captions_by_page: dict[int, list[str | None]] | None = None,
+    *,
+    asset_path_root: Path | None = None,
 ) -> None:
     import json
 
+    root = (asset_path_root if asset_path_root is not None else path.parent).resolve()
     serializable_pages: list[dict[str, Any]] = []
     for page_index, doc in enumerate(pages):
         images = images_by_page.get(page_index, [])
@@ -88,6 +99,7 @@ def _serialize_pages_to_json(
                 "image_index": info.image_index,
                 "xref": info.xref,
                 "path": str(info.path),
+                "asset_path": _compute_asset_path(info.path, root),
                 "ext": info.ext,
                 "caption": (
                     captions_for_page[idx] if idx < len(captions_for_page) else None
@@ -121,6 +133,8 @@ def process_pdf(
     output_dir: str | Path,
     chunking_config: ChunkingConfig | None = None,
     image_captioner: ImageCaptioner | None = None,
+    *,
+    asset_path_root: Path | None = None,
 ) -> list[Document]:
     """Process a PDF into chunk-level LangChain documents and artifacts.
 
@@ -138,6 +152,7 @@ def process_pdf(
         output_dir=output_dir,
         chunking_config=chunking_config,
         image_captioner=image_captioner,
+        asset_path_root=asset_path_root,
     )
     return text_chunks
 
@@ -147,6 +162,8 @@ def process_pdf_to_text_and_caption_docs(
     output_dir: str | Path,
     chunking_config: ChunkingConfig | None = None,
     image_captioner: ImageCaptioner | None = None,
+    *,
+    asset_path_root: Path | None = None,
 ) -> tuple[list[Document], list[Document]]:
     """Return both text chunk documents and caption documents."""
     return _process_pdf_to_text_and_caption_docs(
@@ -154,6 +171,7 @@ def process_pdf_to_text_and_caption_docs(
         output_dir=output_dir,
         chunking_config=chunking_config,
         image_captioner=image_captioner,
+        asset_path_root=asset_path_root,
     )
 
 
@@ -162,10 +180,17 @@ def _process_pdf_to_text_and_caption_docs(
     output_dir: str | Path,
     chunking_config: ChunkingConfig | None,
     image_captioner: ImageCaptioner | None,
+    *,
+    asset_path_root: Path | None = None,
 ) -> tuple[list[Document], list[Document]]:
     pdf_path_obj = Path(pdf_path)
     output_root = Path(output_dir)
     _ensure_output_root(output_root)
+    asset_root = (
+        Path(asset_path_root).resolve()
+        if asset_path_root is not None
+        else output_root.resolve()
+    )
 
     # 1) Page-level text
     page_docs = extract_page_documents(pdf_path_obj)
@@ -195,6 +220,7 @@ def _process_pdf_to_text_and_caption_docs(
                 caption_value = page_captions[idx] if idx < len(page_captions) else None
                 if not caption_value:
                     continue
+                asset_path = _compute_asset_path(info.path, asset_root)
                 caption_docs.append(
                     Document(
                         page_content=f"Image caption: {caption_value}",
@@ -205,6 +231,7 @@ def _process_pdf_to_text_and_caption_docs(
                             "image_index": info.image_index,
                             "xref": info.xref,
                             "path": str(info.path),
+                            "asset_path": asset_path,
                             "ext": info.ext,
                             "caption_source": caption_source_label,
                         },
@@ -222,9 +249,11 @@ def _process_pdf_to_text_and_caption_docs(
             for idx, info in enumerate(image_infos):
                 caption_value = page_captions[idx] if idx < len(page_captions) else None
                 if caption_value:
+                    asset_path = _compute_asset_path(info.path, asset_root)
                     image_caption_records.append(
                         {
                             "path": str(info.path),
+                            "asset_path": asset_path,
                             "caption": caption_value,
                         }
                     )
@@ -239,7 +268,11 @@ def _process_pdf_to_text_and_caption_docs(
     pages_json = output_root / "pages.json"
     chunks_jsonl = output_root / "chunks.jsonl"
     _serialize_pages_to_json(
-        pages_json, page_docs, images_by_page, captions_by_page or None
+        pages_json,
+        page_docs,
+        images_by_page,
+        captions_by_page or None,
+        asset_path_root=asset_root,
     )
     _serialize_documents_to_jsonl(chunks_jsonl, chunk_docs)
 

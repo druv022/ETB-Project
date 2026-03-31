@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 import os
+from abc import ABC, abstractmethod
 from typing import Any, cast
 
 import numpy as np
 from langchain_core.embeddings import Embeddings
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langchain_openai import ChatOpenAI
 
@@ -57,12 +61,84 @@ class FaissCompatibleEmbeddings(Embeddings):
         return _normalize_embed_documents_for_faiss(raw, len(texts))
 
     def embed_query(self, text: str) -> list[float]:
-        return self._inner.embed_query(text)
+        raw = self._inner.embed_query(text)
+        return [float(x) for x in raw]
 
 
 def get_openai_llm(model: str = "gpt-4o-mini", temperature: float = 0) -> ChatOpenAI:
     llm = ChatOpenAI(model=model, temperature=temperature)
     return llm
+
+
+class ChatModelProvider(ABC):
+    """Base class for chat model providers.
+
+    This keeps LLM construction in one place and allows the orchestrator (and
+    other runtime code under `src/`) to select a provider via environment
+    variables without importing provider-specific factories everywhere.
+    """
+
+    name: str
+
+    @abstractmethod
+    def build_chat_model(self) -> BaseChatModel: ...
+
+
+class OpenAICompatibleProvider(ChatModelProvider):
+    """OpenAI-compatible chat provider (also supports OpenRouter via base URL)."""
+
+    name = "openai_compat"
+
+    def build_chat_model(self) -> BaseChatModel:
+        model = os.environ.get("OPENAI_MODEL", "stepfun/step-3.5-flash").strip()
+        temperature = float(os.environ.get("OPENAI_TEMPERATURE", "0"))
+
+        kwargs: dict[str, Any] = {"model": model, "temperature": temperature}
+
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if api_key and api_key.strip():
+            kwargs["api_key"] = api_key.strip()
+
+        base_url = os.environ.get("OPENAI_BASE_URL")
+        if base_url and base_url.strip():
+            kwargs["base_url"] = base_url.strip()
+
+        return ChatOpenAI(**kwargs)
+
+
+class OllamaChatProvider(ChatModelProvider):
+    """Ollama-backed chat provider."""
+
+    name = "ollama"
+
+    def build_chat_model(self) -> BaseChatModel:
+        model = os.environ.get("OLLAMA_CHAT_MODEL", "qwen3.5:9b").strip()
+        temperature = float(os.environ.get("OLLAMA_TEMPERATURE", "0"))
+        return get_ollama_llm(model=model, temperature=temperature)
+
+
+PROVIDERS: dict[str, ChatModelProvider] = {
+    OpenAICompatibleProvider.name: OpenAICompatibleProvider(),
+    OllamaChatProvider.name: OllamaChatProvider(),
+}
+
+
+def get_chat_llm() -> BaseChatModel:
+    """Select and build the chat LLM for runtime orchestration.
+
+    Uses:
+    - ETB_LLM_PROVIDER: 'openai_compat' (default) or 'ollama'
+    - Provider-specific env vars (OPENAI_* or OLLAMA_*)
+    """
+
+    provider = os.environ.get("ETB_LLM_PROVIDER", "openai_compat").strip().lower()
+    p = PROVIDERS.get(provider)
+    if p is None:
+        raise ValueError(
+            f"Unsupported ETB_LLM_PROVIDER={provider!r}. "
+            f"Supported: {', '.join(sorted(PROVIDERS.keys()))}"
+        )
+    return p.build_chat_model()
 
 
 def _ollama_base_url() -> str | None:

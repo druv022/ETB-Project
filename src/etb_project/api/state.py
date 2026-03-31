@@ -18,16 +18,22 @@ from etb_project.vectorstore.faiss_backend import FaissDualVectorStoreBackend
 logger = logging.getLogger(__name__)
 
 
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return str(value)
+
+
 def _serialize_metadata(meta: dict[str, Any] | None) -> dict[str, Any]:
     if not meta:
         return {}
-    out: dict[str, Any] = {}
-    for key, val in meta.items():
-        if isinstance(val, (str, int, float, bool)) or val is None:
-            out[str(key)] = val
-        else:
-            out[str(key)] = str(val)
-    return out
+    return {str(k): _json_safe(v) for k, v in meta.items()}
 
 
 class RetrieverServiceState:

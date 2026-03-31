@@ -96,3 +96,29 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-03-31 00:00:00 EDT**: `Implement the standalone retriever API plan (FastAPI + Docker), keep LangGraph RAG outside the retriever, add indexing/upload + retrieve endpoints, add error codes, tests, and documentation.` (Context: migrate integrated retrieval to a standalone API deployable via Docker Compose, plus a remote retriever client mode for the orchestrator.)
 
 - **2026-03-31 00:00:00 EDT**: `fix the error in the docker file itself instead of manual intervention.` (Context: docker-compose + Dockerfile: OLLAMA_HOST, auto-pull embedding model, healthcheck, models.py base_url from env.)
+
+- **2026-03-31**: `Implement Option A (Streamlit UI → Orchestrator API → Retriever API) with remote retriever, Docker multi-user setup, tests, and docs.` (Context: add `etb_project.orchestrator` FastAPI, wire Streamlit to `/v1/chat`, update docker-compose, add orchestrator tests, update README.)
+
+- **2026-03-31**: `Include the minimal path for user to run the tool in the readme.md and update/add to docs describing the updated approach of running the app.` (Context: add a minimal Docker run section to README and create/update docs describing UI + orchestrator + retriever run modes.)
+
+- **2026-03-31**: `The readme.md has two section, minimal run and quickstart. Only keep quickstart with the minimal steps. And refer to the details docs` (Context: remove separate minimal-run section and make Quickstart the single minimal run path; link to detailed docs.)
+
+- **2026-03-31**: `Update the REARME.md in the parent folder with the correct latest project structure.` (Context: update root `README.md` project structure tree to match current repo layout: orchestrator + retriever APIs, data/ artifacts, and src package layout.)
+
+- **2026-03-31**: `Now update the /docs section with the currect implementation and complete details` (Context: align docs with the current UI → Orchestrator API → Retriever API implementation, endpoints, run modes, and configuration.)
+
+- **2026-03-31 00:00:00 EDT**: `Option B: Serve images via URL (Orchestrator proxy) Implement the plan as specified...` (Context: add `/v1/assets/{asset_path}` to Retriever (safe FileResponse) and Orchestrator (proxy), preserve nested `image_captions` metadata with `asset_path`, and update Streamlit to fetch/display asset bytes via orchestrator.)
+
+- **2026-03-31 00:00:00 EDT**: `Implement lazy loading of sources like image and other artifact in the sources. The UI chat response should be the fastest. Rest can be lazy loading.` (Context: Streamlit Sources UI now defers fetching asset bytes until the user clicks Load; asset fetches are cached in-session to avoid repeated downloads.)
+
+- **2026-03-31 00:00:00 EDT**: `Use the best option i.e the first one with lazy-load per tab` (Context: implement per-source “tab selector” using a horizontal radio so Images are fetched only when the user switches to the Images view; keep the Sources expander UX.)
+
+- **2026-03-31**: `On clicking the radio button, the expanded source disaapears. Fix the issue and test if all feature of UI working. Use cursor browser in the conda etb env to test.` (Context: fix Streamlit rerun collapsing the Sources section by persisting its visibility state; run tests in the `ETB` conda env; UI smoke test via Cursor browser.)
+
+- **2026-03-31**: `The issue is not fixed rather worsen. The source disappears after pressing toggle. Test in the cursor browser and verify is that the best user experince ? Fix it accordingly.` (Context: revert toggle-based Sources visibility (bad UX) and restore a Sources expander that stays open during reruns caused by per-source radio interactions; verify in Cursor browser.)
+
+- **2026-03-31**: `Fix image rendering after Docker deploy` (Context: implement plan — `asset_path` relative to top-level `ETB_DOCUMENT_OUTPUT_DIR` when indexing multiple PDFs; Docker `ETB_DOCUMENT_OUTPUT_DIR`/`ETB_UPLOAD_DIR`; UI derives asset paths from stored absolute paths, forwards bearer token for `/v1/assets`, tests and docs.)
+
+- **2026-03-31**: `use conda etb environment` (Context: document the **`ETB`** conda env in README; run pytest with `conda run -n ETB`; fix `_serialize_metadata` to use `_json_safe` so nested `image_captions` stay JSON-shaped for the retriever API test.)
+
+- **2026-03-31**: `The source name is confusing: 1. f411370fd13b44fbb0c18db63207e351_pdf_with_image.pdf • p.1/1 — Provide only the necessary information. The first part is unnecessary for the user.` (Context: add `display_name_for_source_file` in `ui/asset_paths.py` to strip retriever upload prefix `{uuid.hex}_`; use in Streamlit `_format_source_header`; tests in `test_ui_asset_paths.py`.)

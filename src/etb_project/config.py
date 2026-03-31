@@ -3,8 +3,8 @@
 import os
 from pathlib import Path
 
-# PyYAML has no stubs in some envs (CI, pre-commit); silence mypy for missing stubs.
-import yaml  # type: ignore[import-untyped]
+# PyYAML may not have stubs in some environments; silence mypy for missing stubs.
+import yaml  # type: ignore
 from pydantic import BaseModel, Field
 
 

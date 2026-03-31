@@ -6,13 +6,13 @@ An enterprise chatbot-style RAG project for querying PDF content using persisted
 
 - Dual retrieval (text chunks + image captions), merged for RAG
 - Persisted vector indices (build once, load for runtime querying)
-- Optional pluggable image captioning backends (OpenRouter/OpenAI/mock)
+- Optional pluggable image captioning backends (OpenRouter/OpenAI)
 - Modern Python tooling: Ruff, Black, MyPy, pytest, pre-commit, Docker
 
 ## Requirements
 
-- Python 3.10+
-- pip (or poetry)
+- Python 3.10+ (see `requires-python` in `pyproject.toml`)
+- pip (or [uv](https://github.com/astral-sh/uv) if you use the lockfile)
 
 ## Installation
 
@@ -33,27 +33,48 @@ pip install -r requirements-dev.txt
 pip install -e .
 ```
 
-## Quickstart
-
-1) Configure `src/config/settings.yaml` (or set `ETB_CONFIG` to an alternate YAML).
-
-2) Run the RAG app (local FAISS):
+If you use **uv** and `uv.lock`:
 
 ```bash
-python -m etb_project.main
-make run
+uv sync --all-extras
 ```
 
-### Standalone retriever API (recommended for Docker deployments)
+### Conda (`ETB` environment)
 
-This repo now includes a **standalone retriever HTTP API** (retrieve chunks + index PDFs). The **LangGraph RAG** graph stays outside of the retriever.
+If you use Miniconda/Anaconda, activate the **`ETB`** environment (create it first if needed), then install as above:
 
-- **Start retriever + embeddings with Docker**:
+```bash
+conda activate ETB
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+pip install -e .
+```
+
+Run tests without manually activating:
+
+```bash
+conda run -n ETB pytest
+```
+
+## Quickstart
+
+1. Create a `.env` (e.g. `OPENROUTER_API_KEY=...` for the orchestrator’s OpenAI-compatible client) and configure `src/config/settings.yaml`, or set `ETB_CONFIG` to another YAML path.
+
+2. Start everything (UI + orchestrator + retriever + Ollama) with Docker:
 
 ```bash
 docker compose up --build
 ```
 
+The repo ships a **standalone retriever HTTP API** (retrieve + index PDFs). The **LangGraph RAG** graph runs in the **orchestrator**, not in the retriever.
+
+3. Open the UI:
+
+- `http://localhost:8501`
+
+**Docker note (Sources / images):** The retriever stores extracted PDF images under `ETB_DOCUMENT_OUTPUT_DIR` (Compose sets this to `/app/data/document_output` on the shared `etb_data` volume). The Streamlit UI loads them via the orchestrator at `GET /v1/assets/...`. If you set `RETRIEVER_API_KEY` on the retriever, set the same value in the UI environment (e.g. in `.env` used by Compose) as `RETRIEVER_API_KEY` or `ORCHESTRATOR_ASSET_BEARER_TOKEN` so image requests are authorized.
+
+For other run modes (CLI, provider switching, health checks, etc.), see [`docs/APP_RUN_MODES.md`](docs/APP_RUN_MODES.md).
 Compose starts **Ollama** (pulls the embedding model automatically), then the **retriever** once Ollama is healthy.
 
 - **Check health**:
@@ -76,7 +97,10 @@ If you need to build/update the persisted indices first (PDF preprocessing, chun
 ## Documentation
 
 - **Start here**: [`docs/README.md`](docs/README.md)
-- **Run the RAG app**: [`docs/USAGE.md`](docs/USAGE.md)
+- **CLI RAG (`python -m etb_project.main`)**: [`docs/USAGE.md`](docs/USAGE.md) — single-query vs interactive; Ollama-only chat in CLI vs orchestrator OpenRouter
+- **Run modes (updated)**: [`docs/APP_RUN_MODES.md`](docs/APP_RUN_MODES.md)
+- **Retriever HTTP API**: [`docs/RETRIEVER_API.md`](docs/RETRIEVER_API.md)
+- **Orchestrator HTTP API**: [`docs/ORCHESTRATOR_API.md`](docs/ORCHESTRATOR_API.md)
 - **Configure the project**: [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)
 - **Preprocess PDFs + build/update indices**: [`docs/DOCUMENT_PROCESSING.md`](docs/DOCUMENT_PROCESSING.md)
 - **Document processor CLI flags**: [`docs/CLI_REFERENCE.md`](docs/CLI_REFERENCE.md)
@@ -88,50 +112,35 @@ If you need to build/update the persisted indices first (PDF preprocessing, chun
 ## Project Structure
 
 ```
-etb_project/
-├── src/
-│   ├── config/                # settings.yaml (and optional config module)
-│   │   ├── config.py
-│   │   └── settings.yaml
-│   └── etb_project/           # Main package (installed with pip install .)
-│       ├── __init__.py
-│       ├── config.py          # AppConfig and load_config (reads settings.yaml / ETB_CONFIG)
-│       ├── main.py            # Entry point: load persisted indices, run single-query or interactive RAG loop
-│       ├── models.py          # LLM and embedding helpers
-│       ├── graph_rag.py       # LangGraph RAG graph (ingest_query → retrieve_rag → generate_answer)
-│       ├── api/               # Standalone retriever HTTP API (no RAG graph)
-│       └── retrieval/
-│           ├── __init__.py    # Re-exports retrieval helpers and DualRetriever adapter
-│           ├── loader.py     # load_pdf (PyPDFLoader)
-│           ├── process.py    # split_documents, store_documents (pre-stacked embeddings → FAISS), dual index builders
-│           └── dual_retriever.py # Single-query adapter that merges text/caption retrieval results
-├── tools/                     # Utilities and side projects (not installed)
-│   └── data_generation/
-├── tests/
-│   ├── test_config.py
-│   ├── test_main.py
-│   ├── test_models.py
-│   └── test_retrieval_process.py
-├── docs/
-│   ├── README.md
-│   ├── CONTRIBUTING.md
-│   ├── USAGE.md
-│   ├── CONFIGURATION.md
-│   ├── DOCUMENT_PROCESSING.md
-│   ├── CLI_REFERENCE.md
-│   ├── IMAGE_CAPTIONING.md
-│   ├── DEVELOPMENT.md
-│   ├── TOOLS.md
-│   └── ARCHITECTURE.md
-├── .github/workflows/
+ETB-Project/
+├── app.py                    # Streamlit UI → Orchestrator API
+├── docker-compose.yml        # UI, orchestrator, retriever, Ollama
+├── Dockerfile
+├── Makefile
 ├── pyproject.toml
 ├── requirements.txt
 ├── requirements-dev.txt
-├── Dockerfile
-├── docker-compose.yml
-├── Makefile
-└── README.md
+├── src/
+│   ├── config/
+│   │   └── settings.yaml     # Primary YAML (see docs/CONFIGURATION.md)
+│   └── etb_project/          # Main package (`pip install -e .`)
+│       ├── api/              # Retriever FastAPI
+│       ├── orchestrator/       # Orchestrator FastAPI (chat + asset proxy)
+│       ├── ui/                 # Shared helpers for Streamlit (e.g. asset paths)
+│       ├── document_processing/
+│       ├── retrieval/
+│       ├── vectorstore/
+│       ├── main.py
+│       ├── graph_rag.py
+│       └── ...
+├── docker/                   # Ollama entrypoint / healthchecks
+├── docs/                     # Start with docs/README.md
+├── tools/                    # Not installed with the package
+├── tests/
+└── data/                     # Typical: uploads, document_output, vector indices
 ```
+
+For a fuller component diagram and boundaries, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Contributing
 
