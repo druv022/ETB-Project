@@ -48,11 +48,12 @@ python -m etb_project.document_processor_cli --help
   - Builds FAISS indices in memory for:
     - text chunks (from `chunks.jsonl`)
     - image captions (from caption documents; may be empty if captioning not configured)
-  - In this project’s workflow, FAISS build is generally enabled by default.
+  - **Default: on** (`argparse` default `True` for this flag).
 
 - `--persist-index`
   - Persists the FAISS indices to disk so the main app can load them later.
   - If the destination already exists, new documents are **appended** by default.
+  - **Default: on.** To disable persistence you would need to extend the CLI (there is no `--no-persist-index` at time of writing); omitting both flags still persists with current defaults.
 
 - `--vector-store-dir <dir>`
   - Target directory to write the persisted index when using persistence.

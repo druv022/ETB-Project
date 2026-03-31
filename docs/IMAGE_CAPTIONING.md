@@ -20,8 +20,9 @@ When an image caption is produced:
 - Each image record in `pages.json` gains:
   - `caption`: caption text
   - `caption_source`: a label such as `"vlm"` indicating the caption came from a vision-language model
-- Page-level `Document.metadata` gains an `image_captions` key containing objects with:
-  - `path`: image file path
+- Page-level `Document.metadata` gains an `image_captions` key containing a list of objects with:
+  - `path`: absolute or project filesystem path to the extracted image file
+  - `asset_path`: path relative to the document output root, used by `GET /v1/assets/{asset_path}` on the retriever (see [`RETRIEVER_API.md`](RETRIEVER_API.md))
   - `caption`: generated caption
 - Since the LangChain splitter preserves metadata, chunk-level `Document` objects also carry `image_captions`.
 

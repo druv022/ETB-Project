@@ -12,13 +12,13 @@ This page documents:
 
 ### How the app finds the config
 
-The main app reads configuration from `src/config/settings.yaml`.
+`load_config()` (used by `etb_project.main`, the document processor CLI, and the Retriever API settings) resolves the YAML path as follows:
 
-Resolution behavior:
+1. If **`ETB_CONFIG`** is set, use that path (absolute or as given).
+2. Else if **`./src/config/settings.yaml`** exists relative to the **current working directory**, use it (typical when you run commands from the repo root).
+3. Else use **`src/config/settings.yaml`** next to the installed package (works when the working directory differs).
 
-- It looks for this file relative to the **current working directory** first (so running from the repo root works).
-- It also supports locating the file relative to the installed package location (so running from inside `src/` works).
-- You can override the config path with `ETB_CONFIG` (absolute path to another YAML file).
+If the resolved file is missing, the loader returns **default** `AppConfig` values (see `etb_project.config`). The Retriever API still requires `vector_store_path` to be set in YAML when you run the HTTP service.
 
 ### Core keys
 
@@ -26,18 +26,19 @@ The root README keeps only a minimal subset of these. This page is the full refe
 
 | Key | Type | Description |
 |---|---:|---|
-| `pdf` | string/null | Path to the PDF to index and query (absolute or relative to current working directory). |
-| `query` | string | Single query to run; leave empty for interactive mode. |
-| `retriever_k` | int | Number of chunks to retrieve per query (typically 1–100). |
-| `log_level` | string | Logging level: DEBUG, INFO, WARNING, ERROR. |
-| `vector_store_path` | string | Directory path where persisted vector indices live (used by `etb_project.main` for load-only retrieval). |
+| `pdf` | string/null | Path to a PDF used by CLI workflows and error messages when the local index is missing. |
+| `query` | string | If non-empty, `python -m etb_project.main` runs **retrieval-only** for that string and exits (no LangGraph, no LLM). If empty, runs **interactive** LangGraph RAG. |
+| `retriever_k` | int | Top-k for each sub-retriever branch before merge (1–100); used by `main`, CLI, and retriever API default `k`. |
+| `log_level` | string | DEBUG, INFO, WARNING, ERROR. Used by `main` and passed into Retriever API logging. |
+| `vector_store_backend` | string | Currently only **`faiss`** is implemented (`main` exits if set otherwise). |
+| `vector_store_path` | string | Directory for persisted dual FAISS indices (`main` local mode, CLI, Retriever API). Resolved under `data/` when relative (see `resolve_artifact_path`). |
 | `openrouter_image_caption_model` | string/empty | If set, enables OpenRouter captioning and selects the model name. |
 | `openai_image_caption_model` | string/empty | If set (and OpenRouter model is not set), enables OpenAI captioning and selects the model name. |
 
 Notes:
 
-- `pdf` must point to an existing file. The app exits with an error if it is missing or not found.
-- Captioning model keys control which captioner backend is used (see [`IMAGE_CAPTIONING.md`](IMAGE_CAPTIONING.md)).
+- For **`etb_project.main`**, if the local index is missing, a valid **`pdf`** path is required so the error message can tell you how to rebuild (see [`USAGE.md`](USAGE.md)).
+- Captioning model keys control which captioner backend the **document processor CLI** uses (see [`IMAGE_CAPTIONING.md`](IMAGE_CAPTIONING.md)).
 
 ### Example: interactive mode
 
@@ -75,10 +76,105 @@ openai_image_caption_model: "gpt-4.1-mini"
 
 ## Environment variables
 
+This project uses environment variables for:
+
+- **Service wiring** (UI → Orchestrator → Retriever)
+- **Secrets** (API keys)
+- **Operational limits** (rate limiting, upload limits, async indexing)
+
 ### Config selection
 
 - `ETB_CONFIG`
-  - Absolute path to a YAML file to use instead of `src/config/settings.yaml`.
+  - Path to a YAML file to use instead of the default `src/config/settings.yaml` resolution.
+
+### CLI (`python -m etb_project.main`)
+
+Local vs remote retrieval (overrides default **local** dual-FAISS load):
+
+- `ETB_RETRIEVER_MODE`
+  - `local` (default): load persisted indices from `vector_store_path`.
+  - `remote`: use `RemoteRetriever` to call the Retriever HTTP API (no local FAISS files required on this machine).
+- `RETRIEVER_BASE_URL`
+  - Required when `ETB_RETRIEVER_MODE=remote` (e.g. `http://localhost:8000`). Same variable name as the orchestrator uses to find the retriever.
+- `RETRIEVER_TIMEOUT_S`
+  - Optional; HTTP timeout in seconds for remote retrieval (default `60`).
+
+### UI (Streamlit)
+
+- `ORCHESTRATOR_BASE_URL`
+  - Base URL for the orchestrator (default: `http://localhost:8001`).
+- `RETRIEVER_API_KEY` or `ORCHESTRATOR_ASSET_BEARER_TOKEN`
+  - Optional. If the retriever requires a bearer token (`RETRIEVER_API_KEY` on the retriever service), the UI must send the same token when fetching images from `GET /v1/assets/...` (via the orchestrator proxy). Set one of these in the UI container environment to match the retriever.
+
+### Orchestrator API (FastAPI)
+
+- `RETRIEVER_BASE_URL`
+  - Base URL for the retriever API (required for orchestrator; in Compose it’s `http://retriever:8000`).
+- `ORCH_RETRIEVER_K`
+  - Default `k` used by `POST /v1/chat` when the request body doesn’t specify `k`.
+- `ORCH_SESSION_TTL_SECONDS`
+  - Session TTL for in-memory chat history.
+- `ORCH_CORS_ALLOW_ORIGINS`
+  - Optional comma-separated origins for CORS (e.g. `http://localhost:8501`).
+- `ETB_ORCH_HOST`
+  - Bind address for `python -m etb_project.orchestrator` (default `0.0.0.0`).
+- `ETB_ORCH_PORT` or `PORT`
+  - Listen port (default `8001`). `PORT` is accepted for hosted environments.
+
+LLM provider selection:
+
+- `ETB_LLM_PROVIDER`
+  - `openai_compat` (default) or `ollama`.
+
+OpenAI-compatible chat backend (also used for OpenRouter):
+
+- `OPENAI_BASE_URL`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `OPENAI_TEMPERATURE`
+
+Ollama chat backend:
+
+- `OLLAMA_HOST` (or `OLLAMA_BASE_URL`)
+- `OLLAMA_CHAT_MODEL`
+- `OLLAMA_TEMPERATURE`
+
+### Retriever API (FastAPI)
+
+Process binding (local `uvicorn` via `python -m etb_project.api`):
+
+- `ETB_API_HOST`
+  - Bind address (default `0.0.0.0`).
+- `ETB_API_PORT` or `PORT`
+  - Listen port (default `8000`).
+
+Wiring / auth:
+
+- `RETRIEVER_API_KEY`
+  - If set, clients must send `Authorization: Bearer <token>`.
+
+Artifact directories:
+
+- `ETB_DOCUMENT_OUTPUT_DIR` (default: `data/document_output`)
+- `ETB_UPLOAD_DIR` (default: `data/uploads`)
+
+Indexing behavior:
+
+- `ETB_CHUNK_SIZE` (default: 1000)
+- `ETB_CHUNK_OVERLAP` (default: 200)
+- `ETB_INDEX_ASYNC`
+  - When true (default), `POST /v1/index/documents` runs in background and returns a `job_id` unless `async_mode=false`.
+- `ETB_INDEX_SHUTDOWN_TIMEOUT_S`
+  - Grace period for in-flight indexing on shutdown (default `120` seconds).
+
+Limits:
+
+- `ETB_MAX_RETRIEVE_K` (default: 100; max 100)
+- `ETB_MAX_QUERY_CHARS` (default: 10000)
+- `ETB_MAX_UPLOAD_BYTES` (default: 50MB per PDF)
+- `ETB_MAX_UPLOAD_FILES` (default: 20 files per request)
+- `ETB_MAX_RETRIEVE_BODY_BYTES` (default: 65536)
+- `ETB_RATE_LIMIT_PER_MINUTE` (default: 120)
 
 ### Captioning secrets
 
@@ -98,5 +194,8 @@ Then set the keys in `.env` (do not commit secrets).
 ## Related docs
 
 - [`USAGE.md`](USAGE.md)
+- [`APP_RUN_MODES.md`](APP_RUN_MODES.md)
+- [`RETRIEVER_API.md`](RETRIEVER_API.md)
+- [`ORCHESTRATOR_API.md`](ORCHESTRATOR_API.md)
 - [`DOCUMENT_PROCESSING.md`](DOCUMENT_PROCESSING.md)
 - [`IMAGE_CAPTIONING.md`](IMAGE_CAPTIONING.md)

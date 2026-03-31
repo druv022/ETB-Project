@@ -158,27 +158,27 @@ def test_main_uses_dual_vectorstore_pipeline(tmp_path: Path) -> None:
     )
 
 
-def test_main_interactive_uses_graph_with_dual_retriever(tmp_path: Path) -> None:
-    """Interactive mode builds graph with the dual retriever adapter."""
+def test_main_interactive_uses_agent_graph_with_remote_retriever(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Interactive mode builds agent graph with HTTP RemoteRetriever."""
+    monkeypatch.setenv("ETB_RETRIEVER_MODE", "remote")
+    monkeypatch.setenv("RETRIEVER_BASE_URL", "http://retriever:8000")
     from etb_project.main import main
 
     pdf_file = tmp_path / "dummy.pdf"
     pdf_file.write_bytes(b"")
-    mock_text_vs = MagicMock()
-    mock_caption_vs = MagicMock()
-    mock_text_vs.as_retriever.return_value = MagicMock()
-    mock_caption_vs.as_retriever.return_value = MagicMock()
-    mock_dual_retriever = MagicMock()
+    mock_retriever = MagicMock()
     mock_graph = MagicMock()
     mock_graph.invoke.return_value = {"answer": "ok"}
 
     vector_store_root = tmp_path / "vector_index"
     with (
         patch("etb_project.main.load_config") as mock_load,
-        patch("etb_project.main.FaissDualVectorStoreBackend") as mock_backend_cls,
-        patch("etb_project.main.get_embeddings") as mock_get_embeddings,
-        patch("etb_project.main.DualRetriever") as mock_dual_cls,
-        patch("etb_project.main.build_rag_graph") as mock_build_graph,
+        patch("etb_project.main.RemoteRetriever") as mock_rr_cls,
+        patch("etb_project.main.build_agent_orchestrator_graph") as mock_build_graph,
+        patch("etb_project.main.load_orchestrator_settings") as mock_orch,
+        patch("etb_project.main.get_llm") as mock_get_llm,
         patch("builtins.input", side_effect=["hello", ""]),
         patch("builtins.print"),
     ):
@@ -190,19 +190,132 @@ def test_main_interactive_uses_graph_with_dual_retriever(tmp_path: Path) -> None
             vector_store_path=str(vector_store_root),
             vector_store_backend="faiss",
         )
-        mock_backend = MagicMock()
-        mock_backend.is_ready.return_value = True
-        mock_backend.load.return_value = (mock_text_vs, mock_caption_vs)
-        mock_backend_cls.return_value = mock_backend
-        mock_get_embeddings.return_value = MagicMock()
-        mock_dual_cls.return_value = mock_dual_retriever
+        mock_rr_cls.return_value = mock_retriever
+        mock_get_llm.return_value = MagicMock()
+        mock_orch.return_value = MagicMock(
+            agent_max_retrieve=4,
+            agent_max_steps=10,
+            agent_max_context_chars=48000,
+        )
         mock_build_graph.return_value = mock_graph
 
         main()
 
     mock_build_graph.assert_called_once()
-    assert mock_build_graph.call_args.kwargs["retriever"] is mock_dual_retriever
-    mock_graph.invoke.assert_called_once_with({"query": "hello"})
+    assert mock_build_graph.call_args.kwargs["retriever"] is mock_retriever
+    mock_graph.invoke.assert_called_once()
+    first = mock_graph.invoke.call_args[0][0]
+    assert first["query"] == "hello"
+    assert first["messages"] == []
+    assert first["session_id"] == "cli"
+    assert isinstance(first.get("request_id"), str) and first["request_id"]
+
+
+def test_main_interactive_uses_agent_graph_with_local_retriever(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Interactive mode with local retriever builds agent graph with DualRetriever."""
+    monkeypatch.setenv("ETB_RETRIEVER_MODE", "local")
+    from etb_project.main import main
+
+    pdf_file = tmp_path / "dummy.pdf"
+    pdf_file.write_bytes(b"")
+    mock_retriever = MagicMock()
+    mock_graph = MagicMock()
+    mock_graph.invoke.return_value = {"answer": "ok"}
+
+    vector_store_root = tmp_path / "vector_index"
+    with (
+        patch("etb_project.main.load_config") as mock_load,
+        patch("etb_project.main._build_local_retriever") as mock_build_local,
+        patch("etb_project.main.build_agent_orchestrator_graph") as mock_build_graph,
+        patch("etb_project.main.load_orchestrator_settings") as mock_orch,
+        patch("etb_project.main.get_llm") as mock_get_llm,
+        patch("builtins.input", side_effect=["hello", ""]),
+        patch("builtins.print"),
+    ):
+        mock_load.return_value = MagicMock(
+            pdf=str(pdf_file),
+            query="",
+            retriever_k=3,
+            log_level="INFO",
+            vector_store_path=str(vector_store_root),
+            vector_store_backend="faiss",
+        )
+        mock_build_local.return_value = mock_retriever
+        mock_get_llm.return_value = MagicMock()
+        mock_orch.return_value = MagicMock(
+            agent_max_retrieve=4,
+            agent_max_steps=10,
+            agent_max_context_chars=48000,
+        )
+        mock_build_graph.return_value = mock_graph
+
+        main()
+
+    mock_build_graph.assert_called_once()
+    assert mock_build_graph.call_args.kwargs["retriever"] is mock_retriever
+    mock_graph.invoke.assert_called_once()
+    first = mock_graph.invoke.call_args[0][0]
+    assert first["query"] == "hello"
+    assert first["messages"] == []
+    assert first["session_id"] == "cli"
+
+
+def test_main_interactive_carries_messages_between_turns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Second stdin line passes prior graph messages like orchestrator sessions."""
+    monkeypatch.setenv("ETB_RETRIEVER_MODE", "remote")
+    monkeypatch.setenv("RETRIEVER_BASE_URL", "http://retriever:8000")
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    from etb_project.main import main
+
+    pdf_file = tmp_path / "dummy.pdf"
+    pdf_file.write_bytes(b"")
+    mock_retriever = MagicMock()
+    prior_after_turn1 = [HumanMessage("first"), AIMessage("r1")]
+    mock_graph = MagicMock()
+    mock_graph.invoke.side_effect = [
+        {"answer": "ok1", "messages": prior_after_turn1},
+        {"answer": "ok2", "messages": prior_after_turn1 + [HumanMessage("second")]},
+    ]
+
+    vector_store_root = tmp_path / "vector_index"
+    with (
+        patch("etb_project.main.load_config") as mock_load,
+        patch("etb_project.main.RemoteRetriever") as mock_rr_cls,
+        patch("etb_project.main.build_agent_orchestrator_graph") as mock_build_graph,
+        patch("etb_project.main.load_orchestrator_settings") as mock_orch,
+        patch("etb_project.main.get_llm") as mock_get_llm,
+        patch("builtins.input", side_effect=["first", "second", ""]),
+        patch("builtins.print"),
+    ):
+        mock_load.return_value = MagicMock(
+            pdf=str(pdf_file),
+            query="",
+            retriever_k=3,
+            log_level="INFO",
+            vector_store_path=str(vector_store_root),
+            vector_store_backend="faiss",
+        )
+        mock_rr_cls.return_value = mock_retriever
+        mock_get_llm.return_value = MagicMock()
+        mock_orch.return_value = MagicMock(
+            agent_max_retrieve=4,
+            agent_max_steps=10,
+            agent_max_context_chars=48000,
+        )
+        mock_build_graph.return_value = mock_graph
+
+        main()
+
+    assert mock_graph.invoke.call_count == 2
+    args0 = mock_graph.invoke.call_args_list[0][0][0]
+    args1 = mock_graph.invoke.call_args_list[1][0][0]
+    assert args0["messages"] == []
+    assert args1["messages"] == prior_after_turn1
 
 
 def test_main_function_import() -> None:

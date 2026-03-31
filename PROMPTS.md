@@ -92,3 +92,55 @@ This file logs all prompts given to the AI agent for this project.
 
 - **2026-03-26**: Fix Bandit noise/failures by excluding `.venv` (and other build/venv caches) from Bandit scans in both pre-commit and GitHub Actions, preventing third-party site-packages findings from failing CI.
 - **2026-03-26 11:58:20 EDT**: `Fix the issue: Run pytest tests/ -v --cov=etb_project --cov-report=term-missing --cov-report=html --cov-report=xml ...` (Context: fix Windows path separator mismatch in vectorstore manifest `pdf_path` during append/persist flow causing two CI test failures.)
+
+- **2026-03-31 00:00:00 EDT**: `Implement the standalone retriever API plan (FastAPI + Docker), keep LangGraph RAG outside the retriever, add indexing/upload + retrieve endpoints, add error codes, tests, and documentation.` (Context: migrate integrated retrieval to a standalone API deployable via Docker Compose, plus a remote retriever client mode for the orchestrator.)
+
+- **2026-03-31 00:00:00 EDT**: `fix the error in the docker file itself instead of manual intervention.` (Context: docker-compose + Dockerfile: OLLAMA_HOST, auto-pull embedding model, healthcheck, models.py base_url from env.)
+
+- **2026-03-31**: `Implement Option A (Streamlit UI → Orchestrator API → Retriever API) with remote retriever, Docker multi-user setup, tests, and docs.` (Context: add `etb_project.orchestrator` FastAPI, wire Streamlit to `/v1/chat`, update docker-compose, add orchestrator tests, update README.)
+
+- **2026-03-31**: `Include the minimal path for user to run the tool in the readme.md and update/add to docs describing the updated approach of running the app.` (Context: add a minimal Docker run section to README and create/update docs describing UI + orchestrator + retriever run modes.)
+
+- **2026-03-31**: `The readme.md has two section, minimal run and quickstart. Only keep quickstart with the minimal steps. And refer to the details docs` (Context: remove separate minimal-run section and make Quickstart the single minimal run path; link to detailed docs.)
+
+- **2026-03-31**: `Update the REARME.md in the parent folder with the correct latest project structure.` (Context: update root `README.md` project structure tree to match current repo layout: orchestrator + retriever APIs, data/ artifacts, and src package layout.)
+
+- **2026-03-31**: `Now update the /docs section with the currect implementation and complete details` (Context: align docs with the current UI → Orchestrator API → Retriever API implementation, endpoints, run modes, and configuration.)
+
+- **2026-03-31 00:00:00 EDT**: `Option B: Serve images via URL (Orchestrator proxy) Implement the plan as specified...` (Context: add `/v1/assets/{asset_path}` to Retriever (safe FileResponse) and Orchestrator (proxy), preserve nested `image_captions` metadata with `asset_path`, and update Streamlit to fetch/display asset bytes via orchestrator.)
+
+- **2026-03-31 00:00:00 EDT**: `Implement lazy loading of sources like image and other artifact in the sources. The UI chat response should be the fastest. Rest can be lazy loading.` (Context: Streamlit Sources UI now defers fetching asset bytes until the user clicks Load; asset fetches are cached in-session to avoid repeated downloads.)
+
+- **2026-03-31 00:00:00 EDT**: `Use the best option i.e the first one with lazy-load per tab` (Context: implement per-source “tab selector” using a horizontal radio so Images are fetched only when the user switches to the Images view; keep the Sources expander UX.)
+
+- **2026-03-31**: `On clicking the radio button, the expanded source disaapears. Fix the issue and test if all feature of UI working. Use cursor browser in the conda etb env to test.` (Context: fix Streamlit rerun collapsing the Sources section by persisting its visibility state; run tests in the `ETB` conda env; UI smoke test via Cursor browser.)
+
+- **2026-03-31**: `The issue is not fixed rather worsen. The source disappears after pressing toggle. Test in the cursor browser and verify is that the best user experince ? Fix it accordingly.` (Context: revert toggle-based Sources visibility (bad UX) and restore a Sources expander that stays open during reruns caused by per-source radio interactions; verify in Cursor browser.)
+
+- **2026-03-31**: `Fix image rendering after Docker deploy` (Context: implement plan — `asset_path` relative to top-level `ETB_DOCUMENT_OUTPUT_DIR` when indexing multiple PDFs; Docker `ETB_DOCUMENT_OUTPUT_DIR`/`ETB_UPLOAD_DIR`; UI derives asset paths from stored absolute paths, forwards bearer token for `/v1/assets`, tests and docs.)
+
+- **2026-03-31**: `use conda etb environment` (Context: document the **`ETB`** conda env in README; run pytest with `conda run -n ETB`; fix `_serialize_metadata` to use `_json_safe` so nested `image_captions` stay JSON-shaped for the retriever API test.)
+
+- **2026-03-31**: `The source name is confusing: 1. f411370fd13b44fbb0c18db63207e351_pdf_with_image.pdf • p.1/1 — Provide only the necessary information. The first part is unnecessary for the user.` (Context: add `display_name_for_source_file` in `ui/asset_paths.py` to strip retriever upload prefix `{uuid.hex}_`; use in Streamlit `_format_source_header`; tests in `test_ui_asset_paths.py`.)
+
+- **2026-03-31**: `Orion pre-retrieval clarification (conditional LangGraph) — implement the plan; use conda etb env.` (Context: add `orchestrator/prompts.py`, `orion_parse.py`, `session_messages.py`; extend `graph_rag.py` with `orion_gate` and conditional edges; orchestrator chat `phase` + message serialization; `ETB_ORION_CLARIFY`; CLI/studio `enable_orion_gate=False`; tests and docs. Run `conda run -n etb pytest`.)
+
+- **2026-03-31**: `Agentic orchestrator conversion plan — implement; use conda etb env.` (Context: `orchestrator/agent_graph.py` tool-calling LangGraph; `llm_messages.py` delimiters; settings `ETB_ORCHESTRATOR_AGENT` + agent caps; `asyncio.to_thread` for `graph.invoke`; CLI/studio follow flag; tests `test_agent_orchestrator.py`, `test_llm_messages.py`; orchestrator API tests force legacy with `ETB_ORCHESTRATOR_AGENT=0`; docs ARCHITECTURE/ORCHESTRATOR_API/README. Verify with `conda run -n etb pytest`.)
+
+- **2026-03-31**: `One of the todo is left out. 2nd one.` (Context: complete plan **spike** todo — document LangGraph `create_react_agent` vs hand-rolled decision in `docs/ARCHITECTURE.md` (agentic section); mark `spike-langgraph-state` completed.)
+
+- **2026-03-31**: `Remove legacy LangGraph RAG + remote retriever implementation completely. Only keep the agentic orchestration implementation. The agent should interact with the retriever externally using api call only.` (Context: delete `graph_rag.py`, `orion_parse.py`, `prompts.py` (Orion), `test_graph_rag.py`, `test_orion_parse.py`; orchestrator/main/studio use only `build_agent_orchestrator_graph` + `RemoteRetriever`; remove `ETB_ORCHESTRATOR_AGENT` / legacy branches; CLI interactive requires `ETB_RETRIEVER_MODE=remote`; update docs and tests.)
+
+- **2026-03-31**: `Implement only upto phase B and ignore phase C.` (Context: Phase A — interactive CLI with local `DualRetriever` uses `build_agent_orchestrator_graph`; remove remote-only gate. Phase B — carry `messages` across stdin lines, `session_id=cli`, `request_id` UUID per line. Skip Phase C (CLI `get_chat_llm`). Tests: local interactive, message carry; docs ARCHITECTURE/USAGE/README; PROMPTS.)
+
+- **2026-03-31**: `create a complete architecture and workflow diagram of the agentic workflow in the architecture.md in mermaid` (Context: add a detailed `flowchart` to `docs/ARCHITECTURE.md` under *Agentic orchestrator* showing UI → orchestrator `/v1/chat` handler → `build_agent_orchestrator_graph` → tool loop (`retrieve` / `ask_clarify` / `finalize_answer`) → Retriever HTTP API and Chat LLM → session store → response back to UI.)
+
+- **2026-03-31**: `the diagram is confusing to read. Make it simple yet discription. In required, keep the architecture and the wrokflow separate.` (Context: replace combined agentic diagram in `docs/ARCHITECTURE.md` with two Mermaid charts: compact **Architecture** (UI → orchestrator → session, graph, LLM, retriever) and **Workflow** (per-message steps + tool branch + loop note); short prose + guardrail pointer.)
+
+- **2026-03-31**: `add code comments for all files changed in agentic orchestration.` (Context: document agentic modules — `agent_graph.py`, `agent_system_prompt.py`, `llm_messages.py`, `settings.py`, `app.py`, `schemas.py`, `session_messages.py`, `sessions.py`, `studio_entry.py`, `main.py`, `orchestrator/__main__.py` — module purpose, non-obvious graph behavior, HTTP/chat/session integration.)
+
+- **2026-03-31**: `the output format is: <tool_call> ... Remove the unwanted tags.` (Context: `strip_llm_tool_markup` in `llm_messages.py`; wired through `extract_text_from_ai_message`, grounded-generation else branch, `ask_clarify` body, orchestrator FastAPI answer, Streamlit `app.py`, CLI `main.py`; tests in `test_llm_messages.py`.)
+
+- **2026-03-31**: `implement a plan to remove duplicate content which is optimal and simple yet robust.` (Context: content-based `_merge_documents` in `agent_graph.py` — SHA-256 of stripped full text, substring containment filter, consecutive boundary overlap merge (`_MIN_BOUNDARY_OVERLAP_CHARS`); remove `_doc_dedupe_key`; tests `test_agent_merge_documents.py`; ARCHITECTURE note.)
+
+- **2026-03-31**: `After how many interaction does answer is presented. I was presented with both times question. Test the following workflow in cursor browser. Enter question: What is figure 2? And when asked clarifying question, respond I don't remember. Record the behavior which should be allwing user to respond rather the UI returns with a response.` (Context: document clarify vs answer phases, browser/API checks, optional prompt hardening if second turn stays on ask_clarify.)
