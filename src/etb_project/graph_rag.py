@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import os
 from typing import Annotated, Any
 
 from langchain_core.documents import Document
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, AnyMessage, HumanMessage
+from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
+
+from etb_project.orchestrator.orion_parse import parse_orion_response
+from etb_project.orchestrator.prompts import ORION_SYSTEM_PROMPT
 
 
 class RAGState(TypedDict, total=False):
@@ -17,6 +21,9 @@ class RAGState(TypedDict, total=False):
 
     Designed to be easily extendable with future nodes such as query rewriting,
     routing, SQL/tool calls, reasoning, and response post-processing.
+
+    ``route`` is set by ``orion_gate`` when Orion pre-retrieval clarification is enabled:
+    ``\"clarify\"`` (return clarification only) or ``\"retrieve\"`` (run retrieval + answer).
     """
 
     # Core conversation state
@@ -57,20 +64,35 @@ def _extract_text_from_ai_message(message: AIMessage) -> str:
     return str(content).strip()
 
 
+def _orion_gate_enabled(explicit: bool | None) -> bool:
+    """Resolve Orion gate from explicit flag or ``ETB_ORION_CLARIFY`` (default: on)."""
+    if explicit is not None:
+        return explicit
+    v = os.environ.get("ETB_ORION_CLARIFY", "1").strip().lower()
+    return v not in ("0", "false", "no", "off")
+
+
 def build_rag_graph(
     llm: BaseChatModel,
     retriever: Any,
+    *,
+    enable_orion_gate: bool | None = None,
 ) -> Any:
     """Build and compile the LangGraph StateGraph for the RAG pipeline.
 
     Parameters
     ----------
     llm:
-        Chat model used to generate the final answer.
+        Chat model used for Orion (when enabled) and for the final grounded answer.
     retriever:
         Object with an ``invoke(query: str) -> list[Document]`` method, typically
         the FAISS retriever returned from ``vectorstore.as_retriever(...)``.
+    enable_orion_gate:
+        If ``True``, run Orion clarification before retrieval. If ``False``, skip
+        directly to retrieval. If ``None``, use environment variable
+        ``ETB_ORION_CLARIFY`` (default ``1`` = enabled).
     """
+    orion_on = _orion_gate_enabled(enable_orion_gate)
 
     def ingest_query(state: RAGState) -> RAGState:
         """Convert raw query text into initial message state.
@@ -85,14 +107,49 @@ def build_rag_graph(
         return {
             "messages": existing_messages,
             "query": raw_query,
-            # Initialize commonly used fields to predictable defaults
-            "rewritten_query": state.get("rewritten_query"),
-            "context_docs": state.get("context_docs") or [],
-            "reasoning_steps": state.get("reasoning_steps") or [],
-            "tool_calls": state.get("tool_calls") or [],
-            "route": state.get("route"),
-            "answer": state.get("answer"),
+            "rewritten_query": None,
+            "context_docs": [],
+            "reasoning_steps": [],
+            "tool_calls": [],
+            "route": None,
+            "answer": None,
         }
+
+    def orion_gate(state: RAGState) -> RAGState:
+        """Orion: clarify or emit READY TO RETRIEVE with refined query."""
+        messages = list(state.get("messages") or [])
+        llm_messages = [SystemMessage(content=ORION_SYSTEM_PROMPT)] + messages
+        response = llm.invoke(llm_messages)
+        if isinstance(response, AIMessage):
+            text = _extract_text_from_ai_message(response)
+            ai_msg = response
+        else:
+            text = str(response).strip()
+            ai_msg = AIMessage(content=text)
+
+        raw_query = state.get("query", "") or ""
+        parsed = parse_orion_response(text, fallback_query=raw_query)
+
+        if not parsed.ready:
+            return {
+                "messages": messages + [ai_msg],
+                "answer": text,
+                "route": "clarify",
+            }
+
+        refined = parsed.refined_query or raw_query
+        # Persist full Orion reply (including READY line) for session continuity
+        display_ai = AIMessage(content=parsed.display_text)
+        return {
+            "messages": messages + [display_ai],
+            "rewritten_query": refined,
+            "route": "retrieve",
+        }
+
+    def route_after_orion(state: RAGState) -> str:
+        if state.get("route") == "retrieve":
+            return "retrieve"
+        return "clarify"
 
     def retrieve_rag(state: RAGState) -> RAGState:
         """Retrieve context documents from the vector store retriever."""
@@ -158,7 +215,17 @@ def build_rag_graph(
     graph.add_node("generate_answer", generate_answer)
 
     graph.set_entry_point("ingest_query")
-    graph.add_edge("ingest_query", "retrieve_rag")
+    if orion_on:
+        graph.add_node("orion_gate", orion_gate)
+        graph.add_edge("ingest_query", "orion_gate")
+        graph.add_conditional_edges(
+            "orion_gate",
+            route_after_orion,
+            {"clarify": END, "retrieve": "retrieve_rag"},
+        )
+    else:
+        graph.add_edge("ingest_query", "retrieve_rag")
+
     graph.add_edge("retrieve_rag", "generate_answer")
     graph.add_edge("generate_answer", END)
 

@@ -100,6 +100,12 @@ flowchart TB
 ```
 
 - **Orchestrator** (`etb_project.orchestrator`): session chat, LangGraph RAG, calls the retriever for context, proxies `GET /v1/assets/{path}` to the retriever for UI image/artifact bytes.
+
+#### Orion pre-retrieval clarification (orchestrator LangGraph)
+
+When **`ETB_ORION_CLARIFY`** is enabled (default `1`), the graph runs an **`orion_gate`** node before retrieval: the chat LLM follows `ORION_SYSTEM_PROMPT` in [`src/etb_project/orchestrator/prompts.py`](../src/etb_project/orchestrator/prompts.py). If the user message is ambiguous, the model returns a **clarifying** reply and the graph ends **without** calling the retriever. If the model emits **`READY TO RETRIEVE:`** with a refined query, the graph continues to **`retrieve_rag` → `generate_answer`** using that refined query.
+
+The CLI (`python -m etb_project.main`) and LangGraph Studio entry build the graph with **`enable_orion_gate=False`** so each interactive line stays a single direct RAG pass unless you enable Orion via environment or change the call site.
 - **Retriever** (`etb_project.api`): dual FAISS retrieval, PDF indexing, serves files from `ETB_DOCUMENT_OUTPUT_DIR` under `/v1/assets/...`.
 - **UI** (`app.py`): talks only to the orchestrator (chat + assets).
 
