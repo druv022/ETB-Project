@@ -106,3 +106,13 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-03-31**: `Update the REARME.md in the parent folder with the correct latest project structure.` (Context: update root `README.md` project structure tree to match current repo layout: orchestrator + retriever APIs, data/ artifacts, and src package layout.)
 
 - **2026-03-31**: `Now update the /docs section with the currect implementation and complete details` (Context: align docs with the current UI → Orchestrator API → Retriever API implementation, endpoints, run modes, and configuration.)
+
+- **2026-03-31 00:00:00 EDT**: `Option B: Serve images via URL (Orchestrator proxy) Implement the plan as specified...` (Context: add `/v1/assets/{asset_path}` to Retriever (safe FileResponse) and Orchestrator (proxy), preserve nested `image_captions` metadata with `asset_path`, and update Streamlit to fetch/display asset bytes via orchestrator.)
+
+- **2026-03-31 00:00:00 EDT**: `Implement lazy loading of sources like image and other artifact in the sources. The UI chat response should be the fastest. Rest can be lazy loading.` (Context: Streamlit Sources UI now defers fetching asset bytes until the user clicks Load; asset fetches are cached in-session to avoid repeated downloads.)
+
+- **2026-03-31 00:00:00 EDT**: `Use the best option i.e the first one with lazy-load per tab` (Context: implement per-source “tab selector” using a horizontal radio so Images are fetched only when the user switches to the Images view; keep the Sources expander UX.)
+
+- **2026-03-31**: `On clicking the radio button, the expanded source disaapears. Fix the issue and test if all feature of UI working. Use cursor browser in the conda etb env to test.` (Context: fix Streamlit rerun collapsing the Sources section by persisting its visibility state; run tests in the `ETB` conda env; UI smoke test via Cursor browser.)
+
+- **2026-03-31**: `The issue is not fixed rather worsen. The source disappears after pressing toggle. Test in the cursor browser and verify is that the best user experince ? Fix it accordingly.` (Context: revert toggle-based Sources visibility (bad UX) and restore a Sources expander that stays open during reruns caused by per-source radio interactions; verify in Cursor browser.)

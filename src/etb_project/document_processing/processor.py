@@ -88,6 +88,7 @@ def _serialize_pages_to_json(
                 "image_index": info.image_index,
                 "xref": info.xref,
                 "path": str(info.path),
+                "asset_path": str(info.path.relative_to(path.parent)),
                 "ext": info.ext,
                 "caption": (
                     captions_for_page[idx] if idx < len(captions_for_page) else None
@@ -195,6 +196,10 @@ def _process_pdf_to_text_and_caption_docs(
                 caption_value = page_captions[idx] if idx < len(page_captions) else None
                 if not caption_value:
                     continue
+                try:
+                    asset_path = str(info.path.relative_to(output_root))
+                except Exception:
+                    asset_path = str(info.path)
                 caption_docs.append(
                     Document(
                         page_content=f"Image caption: {caption_value}",
@@ -205,6 +210,7 @@ def _process_pdf_to_text_and_caption_docs(
                             "image_index": info.image_index,
                             "xref": info.xref,
                             "path": str(info.path),
+                            "asset_path": asset_path,
                             "ext": info.ext,
                             "caption_source": caption_source_label,
                         },
@@ -222,9 +228,14 @@ def _process_pdf_to_text_and_caption_docs(
             for idx, info in enumerate(image_infos):
                 caption_value = page_captions[idx] if idx < len(page_captions) else None
                 if caption_value:
+                    try:
+                        asset_path = str(info.path.relative_to(output_root))
+                    except Exception:
+                        asset_path = str(info.path)
                     image_caption_records.append(
                         {
                             "path": str(info.path),
+                            "asset_path": asset_path,
                             "caption": caption_value,
                         }
                     )

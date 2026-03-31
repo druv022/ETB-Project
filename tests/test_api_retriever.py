@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from etb_project.api.app import create_app
+from etb_project.api.state import _serialize_metadata
 
 
 @pytest.fixture
@@ -169,3 +170,43 @@ def test_retrieve_response_schema_contract(
     ch = r.json()["chunks"][0]
     assert "content" in ch and isinstance(ch["content"], str)
     assert "metadata" in ch and isinstance(ch["metadata"], dict)
+
+
+def test_assets_serves_file_from_document_output_dir(
+    tmp_settings_yaml: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ETB_CONFIG", str(tmp_settings_yaml))
+    out_dir = tmp_path / "document_output"
+    img_dir = out_dir / "images"
+    img_dir.mkdir(parents=True)
+    img = img_dir / "page1_image1.png"
+    img.write_bytes(b"\x89PNG\r\n\x1a\nfake")
+    monkeypatch.setenv("ETB_DOCUMENT_OUTPUT_DIR", str(out_dir))
+    with TestClient(create_app()) as client:
+        r = client.get("/v1/assets/images/page1_image1.png")
+    assert r.status_code == 200
+    assert r.content.startswith(b"\x89PNG")
+
+
+def test_assets_rejects_path_traversal(
+    tmp_settings_yaml: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ETB_CONFIG", str(tmp_settings_yaml))
+    out_dir = tmp_path / "document_output"
+    out_dir.mkdir(parents=True)
+    monkeypatch.setenv("ETB_DOCUMENT_OUTPUT_DIR", str(out_dir))
+    with TestClient(create_app()) as client:
+        r = client.get("/v1/assets/../secrets.txt")
+    # Some ASGI stacks normalize "/a/../b" to "/b" before routing.
+    assert r.status_code in (400, 404)
+
+
+def test_serialize_metadata_preserves_nested_image_captions() -> None:
+    meta = {
+        "source": "x.pdf",
+        "image_captions": [{"asset_path": "images/a.png", "caption": "cap"}],
+        "other": {"k": ["v"]},
+    }
+    out = _serialize_metadata(meta)
+    assert isinstance(out["image_captions"], list)
+    assert out["image_captions"][0]["asset_path"] == "images/a.png"

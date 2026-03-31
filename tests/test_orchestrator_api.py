@@ -81,3 +81,32 @@ def test_chat_returns_502_on_empty_answer(client: TestClient) -> None:
         r = client.post("/v1/chat", json={"session_id": "s1", "message": "q"})
     assert r.status_code == 502
     assert r.json()["code"] == "EMPTY_ANSWER"
+
+
+def test_assets_proxy_forwards_authorization_header(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RETRIEVER_BASE_URL", "http://retriever:8000")
+    monkeypatch.setenv("ETB_LLM_PROVIDER", "openai_compat")
+    monkeypatch.setenv("OPENAI_MODEL", "stepfun/step-3.5-flash")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
+
+    class FakeResp:
+        status_code = 200
+        content = b"abc"
+        text = "ok"
+        headers = {"content-type": "image/png"}
+
+    async def fake_get(self, url: str, headers: dict | None = None):  # type: ignore[no-untyped-def]
+        assert headers is not None
+        assert headers.get("authorization") == "Bearer secret"
+        return FakeResp()
+
+    with (
+        patch("httpx.AsyncClient.get", new=fake_get),
+        TestClient(create_app()) as c,
+    ):
+        r = c.get("/v1/assets/images/x.png", headers={"Authorization": "Bearer secret"})
+    assert r.status_code == 200
+    assert r.content == b"abc"

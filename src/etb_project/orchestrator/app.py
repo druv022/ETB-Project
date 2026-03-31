@@ -15,6 +15,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
+import httpx
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -181,6 +182,60 @@ def create_app() -> FastAPI:
             retriever_base_url=settings.retriever_base_url or None,
             llm_configured=llm_ok,
         )
+
+    @app.get("/v1/assets/{asset_path:path}", tags=["assets"])
+    async def asset_proxy(
+        request: Request,
+        asset_path: str,
+        settings: OrchestratorSettings = Depends(get_settings),
+    ) -> Response:
+        """Proxy asset bytes from the Retriever API.
+
+        The Retriever owns the document_output_dir artifacts; the orchestrator
+        exposes them to the UI so Streamlit only needs one base URL.
+        """
+        if not settings.retriever_base_url:
+            raise OrchestratorAPIError(
+                500,
+                "CONFIG_ERROR",
+                "RETRIEVER_BASE_URL is not configured for the orchestrator.",
+            )
+        base = settings.retriever_base_url.rstrip("/")
+        url = f"{base}/v1/assets/{asset_path}"
+        headers: dict[str, str] = {}
+        auth = request.headers.get("authorization")
+        if auth:
+            headers["authorization"] = auth
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.get(url, headers=headers)
+        except httpx.RequestError as exc:
+            raise OrchestratorAPIError(
+                502,
+                "RETRIEVER_UNREACHABLE",
+                "Retriever service unreachable while fetching asset.",
+                str(exc)[:1000],
+            ) from exc
+
+        if resp.status_code == 401:
+            raise OrchestratorAPIError(
+                401, "UNAUTHORIZED", "Invalid or missing bearer token."
+            )
+        if resp.status_code == 404:
+            raise OrchestratorAPIError(404, "ASSET_NOT_FOUND", "Asset not found.")
+        if resp.status_code == 400:
+            raise OrchestratorAPIError(400, "BAD_REQUEST", "Invalid asset path.")
+        if resp.status_code >= 400:
+            raise OrchestratorAPIError(
+                502,
+                "ASSET_PROXY_FAILED",
+                "Failed to fetch asset from retriever.",
+                f"status={resp.status_code} body={resp.text[:500]}",
+            )
+
+        media_type = resp.headers.get("content-type") or "application/octet-stream"
+        return Response(content=resp.content, media_type=media_type)
 
     @app.post("/v1/chat", response_model=ChatResponse, tags=["chat"])
     async def chat(

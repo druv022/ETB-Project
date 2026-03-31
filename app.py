@@ -1,4 +1,6 @@
 import os
+from pathlib import Path
+from typing import Any
 
 import requests
 import streamlit as st
@@ -70,6 +72,8 @@ def ensure_session_state() -> None:
     if "session_id" not in st.session_state:
         # Stable per-browser-session identifier; orchestrator uses it for memory.
         st.session_state.session_id = os.urandom(16).hex()
+    if "last_sources" not in st.session_state:
+        st.session_state.last_sources = []
 
 
 def call_orchestrator_chat(message: str) -> tuple[str, list[dict]]:
@@ -96,6 +100,172 @@ def call_orchestrator_chat(message: str) -> tuple[str, list[dict]]:
     if not answer:
         answer = "Orion did not receive a valid answer from the Orchestrator."
     return answer, sources
+
+
+def _orchestrator_base_url() -> str:
+    return os.getenv("ORCHESTRATOR_BASE_URL", "http://localhost:8001").rstrip("/")
+
+
+@st.cache_data(show_spinner=False, ttl=3600)
+def _fetch_asset_bytes(asset_path: str) -> tuple[bytes, str] | None:
+    if not asset_path.strip():
+        return None
+    base = _orchestrator_base_url()
+    url = f"{base}/v1/assets/{asset_path.lstrip('/')}"
+    try:
+        resp = requests.get(url, timeout=30)
+    except requests.RequestException:
+        return None
+    if resp.status_code != 200:
+        return None
+    ctype = resp.headers.get("content-type") or "application/octet-stream"
+    return resp.content, ctype
+
+
+def _safe_path(value: Any) -> Path | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return Path(value)
+    except Exception:
+        return None
+
+
+def _format_source_header(i: int, meta: dict[str, Any]) -> str:
+    source = meta.get("source")
+    page = meta.get("page")
+    total_pages = meta.get("total_pages")
+
+    filename = "unknown"
+    if isinstance(source, str) and source.strip():
+        filename = Path(source).name
+
+    parts: list[str] = [f"**{i}. {filename}**"]
+    if isinstance(page, int):
+        if isinstance(total_pages, int):
+            parts.append(f"p.{page}/{total_pages}")
+        else:
+            parts.append(f"p.{page}")
+    return " • ".join(parts)
+
+
+def _extract_image_caption_records(meta: dict[str, Any]) -> list[dict[str, str]]:
+    records = meta.get("image_captions")
+    if not isinstance(records, list):
+        return []
+    out: list[dict[str, str]] = []
+    for rec in records:
+        if not isinstance(rec, dict):
+            continue
+        path = rec.get("path")
+        asset_path = rec.get("asset_path")
+        caption = rec.get("caption")
+        if not isinstance(caption, str) or not caption.strip():
+            continue
+        if isinstance(asset_path, str) and asset_path.strip():
+            out.append(
+                {"asset_path": asset_path, "path": str(path or ""), "caption": caption}
+            )
+            continue
+        if isinstance(path, str) and path.strip():
+            out.append({"path": path, "caption": caption})
+    return out
+
+
+def _render_images_tab(content: str, meta: dict[str, Any]) -> None:
+    image_caps = _extract_image_caption_records(meta)
+    if image_caps:
+        cols = st.columns(3)
+        for idx, rec in enumerate(image_caps):
+            with cols[idx % 3]:
+                asset_path = rec.get("asset_path")
+                if isinstance(asset_path, str) and asset_path.strip():
+                    fetched = _fetch_asset_bytes(asset_path)
+                    if fetched is not None:
+                        data, ctype = fetched
+                        st.image(data, use_container_width=True)
+                    else:
+                        st.caption("Failed to load image.")
+                else:
+                    img_path = _safe_path(rec.get("path"))
+                    if img_path is not None and img_path.exists():
+                        st.image(str(img_path), use_container_width=True)
+                    else:
+                        st.caption(rec.get("path") or "")
+                caption = rec.get("caption") or ""
+                short = caption[:260] + ("…" if len(caption) > 260 else "")
+                st.caption(short)
+        return
+
+    single_asset_path = meta.get("asset_path")
+    if isinstance(single_asset_path, str) and single_asset_path.strip():
+        fetched = _fetch_asset_bytes(single_asset_path)
+        if fetched is not None:
+            data, ctype = fetched
+            st.image(data, use_container_width=True)
+        else:
+            st.caption("Failed to load image.")
+        if content:
+            st.caption(content[:4000])
+        details: list[str] = []
+        if meta.get("caption_source"):
+            details.append(f"caption_source: {meta.get('caption_source')}")
+        if meta.get("xref"):
+            details.append(f"xref: {meta.get('xref')}")
+        if meta.get("image_index"):
+            details.append(f"image_index: {meta.get('image_index')}")
+        if details:
+            st.caption(" • ".join(details))
+        return
+
+    single_path = _safe_path(meta.get("path"))
+    if single_path is not None:
+        if single_path.exists():
+            st.image(str(single_path), use_container_width=True)
+        else:
+            st.caption(str(single_path))
+
+        if content:
+            st.caption(content[:4000])
+
+        details: list[str] = []
+        if meta.get("caption_source"):
+            details.append(f"caption_source: {meta.get('caption_source')}")
+        if meta.get("xref"):
+            details.append(f"xref: {meta.get('xref')}")
+        if meta.get("image_index"):
+            details.append(f"image_index: {meta.get('image_index')}")
+        if details:
+            st.caption(" • ".join(details))
+        return
+
+    st.caption("No images for this source.")
+
+
+def render_source_card(i: int, source: dict[str, Any]) -> None:
+    content = (source.get("content") or "").strip()
+    meta = source.get("metadata") or {}
+    if not isinstance(meta, dict):
+        meta = {}
+
+    st.markdown(_format_source_header(i, meta))
+    tab_key = f"source_tab::{i}::{meta.get('source')}::{meta.get('page')}::{meta.get('start_index')}"
+    selected = st.radio(
+        "Source view",
+        ["Excerpt", "Images", "Raw"],
+        horizontal=True,
+        label_visibility="collapsed",
+        key=tab_key,
+    )
+    if selected == "Excerpt":
+        if content:
+            st.markdown(content)
+        else:
+            st.caption("No excerpt content for this source.")
+    elif selected == "Images":
+        _render_images_tab(content, meta)
+    else:
+        st.json(meta, expanded=False)
 
 
 def main():
@@ -250,14 +420,18 @@ def main():
                 st.session_state.messages.append(
                     {"role": "assistant", "content": reply}
                 )
-                if sources:
-                    with st.expander("Sources", expanded=False):
-                        for i, s in enumerate(sources, 1):
-                            content = (s.get("content") or "").strip()
-                            meta = s.get("metadata") or {}
-                            st.markdown(f"**{i}.** {meta}")
-                            if content:
-                                st.markdown(content)
+                st.session_state.last_sources = sources or []
+
+    # Render the most recent Sources on every rerun so
+    # radio interactions don't make it disappear.
+    if st.session_state.last_sources:
+        with st.expander("Sources", expanded=True):
+            for i, s in enumerate(st.session_state.last_sources, 1):
+                if isinstance(s, dict):
+                    render_source_card(i, s)
+                else:
+                    st.markdown(f"**{i}.**")
+                    st.json(s, expanded=False)
 
 
 if __name__ == "__main__":

@@ -16,12 +16,13 @@ from fastapi import (
     Depends,
     FastAPI,
     File,
+    HTTPException,
     Request,
     Response,
     UploadFile,
 )
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -110,6 +111,25 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             duration_ms,
         )
         return response
+
+
+class AssetTraversalGuardMiddleware(BaseHTTPMiddleware):
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        raw_path = request.scope.get("raw_path")
+        if isinstance(raw_path, (bytes, bytearray)):
+            raw = bytes(raw_path)
+            raw_l = raw.lower()
+            if raw_l.startswith(b"/v1/assets/") and (
+                b"/../" in raw_l or raw_l.endswith(b"/..") or b"%2e%2e" in raw_l
+            ):
+                return JSONResponse(
+                    status_code=400, content={"detail": "Invalid asset path."}
+                )
+        return await call_next(request)
 
 
 def _error_response(
@@ -254,6 +274,7 @@ def create_app() -> FastAPI:
         description="Dual FAISS retrieval and PDF indexing (no RAG graph).",
         lifespan=lifespan,
     )
+    app.add_middleware(AssetTraversalGuardMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
 
     @app.exception_handler(RetrieverAPIError)
@@ -296,6 +317,30 @@ def create_app() -> FastAPI:
             embeddings_ok=emb_ok,
             vector_store_path=str(settings.vector_store_path),
         )
+
+    @app.get(
+        "/v1/assets/{asset_path:path}",
+        tags=["assets"],
+        dependencies=[Depends(require_api_key_if_configured)],
+    )
+    async def asset(
+        asset_path: str,
+        settings: RetrieverAPISettings = Depends(get_settings),
+    ) -> FileResponse:
+        """Serve extracted artifacts (images) from document_output_dir.
+
+        The path is resolved under document_output_dir and guarded against
+        path traversal.
+        """
+        root = settings.document_output_dir.resolve()
+        candidate = (root / asset_path).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid asset path.") from exc
+        if not candidate.exists() or not candidate.is_file():
+            raise HTTPException(status_code=404, detail="Asset not found.")
+        return FileResponse(path=str(candidate))
 
     @app.post(
         "/v1/retrieve",
