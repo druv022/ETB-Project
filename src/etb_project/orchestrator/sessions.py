@@ -1,3 +1,5 @@
+"""In-memory chat sessions for the orchestrator (message history per ``session_id``)."""
+
 from __future__ import annotations
 
 import time

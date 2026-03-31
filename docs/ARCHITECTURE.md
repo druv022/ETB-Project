@@ -31,9 +31,8 @@ ETB-Project/
 │       ├── config.py           # AppConfig, load_config
 │       ├── main.py             # CLI RAG (local or remote retriever)
 │       ├── models.py           # LLM + embedding helpers
-│       ├── graph_rag.py        # LangGraph RAG graph
 │       ├── api/                # Retriever FastAPI (retrieve, index, assets)
-│       ├── orchestrator/       # Orchestrator FastAPI (chat, asset proxy)
+│       ├── orchestrator/       # Agentic LangGraph + FastAPI (chat, asset proxy)
 │       ├── ui/                 # Shared UI helpers (asset paths, headers)
 │       ├── document_processing/
 │       ├── document_processor_cli.py
@@ -77,7 +76,7 @@ Code under `tools/` is **not** part of the installed package. See [`TOOLS.md`](T
 - Loads configuration from `src/config/settings.yaml` (or `ETB_CONFIG`)
 - Uses **local** or **remote** retrieval via `ETB_RETRIEVER_MODE` and `RETRIEVER_BASE_URL`
 - If **`query`** is set: **retrieval only** (logs document snippets; no LangGraph, no LLM)
-- If **`query`** is empty: **interactive LangGraph** loop; chat LLM is **Ollama** via `get_ollama_llm()` (not `get_chat_llm()` / OpenRouter — those are used by the **Orchestrator API**)
+- If **`query`** is empty: **interactive agent** LangGraph ([`build_agent_orchestrator_graph`](../src/etb_project/orchestrator/agent_graph.py)) with either **local** `DualRetriever` (persisted FAISS) or **remote** [`RemoteRetriever`](../src/etb_project/retrieval/remote_retriever.py). Same tools and guardrails as the HTTP orchestrator; prior turns are kept in-process via `messages` (session id `cli`, new `request_id` per line). Chat LLM is **Ollama** via `get_ollama_llm()`.
 
 ### Runtime services (Docker / production-style)
 
@@ -99,17 +98,60 @@ flowchart TB
   Orch -->|GET /v1/assets/... forward| Ret
 ```
 
-- **Orchestrator** (`etb_project.orchestrator`): session chat, LangGraph RAG, calls the retriever for context, proxies `GET /v1/assets/{path}` to the retriever for UI image/artifact bytes.
+- **Orchestrator** (`etb_project.orchestrator`): session chat, **agentic** LangGraph ([`agent_graph.py`](../src/etb_project/orchestrator/agent_graph.py)), calls the **Retriever HTTP API** via [`RemoteRetriever`](../src/etb_project/retrieval/remote_retriever.py) only (`POST /v1/retrieve`), proxies `GET /v1/assets/{path}` to the retriever for UI image/artifact bytes.
 
-#### Orion pre-retrieval clarification (orchestrator LangGraph)
+#### Agentic orchestrator (`POST /v1/chat`)
 
-When **`ETB_ORION_CLARIFY`** is enabled (default `1`), the graph runs an **`orion_gate`** node before retrieval: the chat LLM follows `ORION_SYSTEM_PROMPT` in [`src/etb_project/orchestrator/prompts.py`](../src/etb_project/orchestrator/prompts.py). If the user message is ambiguous, the model returns a **clarifying** reply and the graph ends **without** calling the retriever. If the model emits **`READY TO RETRIEVE:`** with a refined query, the graph continues to **`retrieve_rag` → `generate_answer`** using that refined query.
+The orchestrator runs a **hand-rolled LangGraph** (`invoke_agent` → `execute_tools` → conditional loop). LangGraph’s `create_react_agent` / generic `ToolNode` were not used so we keep full control over **`accumulated_docs`**, merge/dedupe, clarify/finalize short-circuits, and step limits. The chat LLM uses **tool calls** (`retrieve`, `ask_clarify`, `finalize_answer`) with guardrails from [`load_orchestrator_settings()`](../src/etb_project/orchestrator/settings.py): `ETB_AGENT_MAX_RETRIEVE`, `ETB_AGENT_MAX_STEPS`, `ETB_AGENT_MAX_CONTEXT_CHARS`. Retrieved chunks are **merged and deduped** in state; grounded generation uses [`llm_messages.py`](../src/etb_project/orchestrator/llm_messages.py) (delimiter-wrapped context). The graph runs under **`asyncio.to_thread(graph.invoke, ...)`** in the FastAPI handler.
 
-The CLI (`python -m etb_project.main`) and LangGraph Studio entry build the graph with **`enable_orion_gate=False`** so each interactive line stays a single direct RAG pass unless you enable Orion via environment or change the call site.
+#### Agentic workflow (diagrams)
+
+**Architecture** — main components and dependencies (production-style path: UI → orchestrator → retriever; LLM is configured inside the orchestrator).
+
+```mermaid
+flowchart LR
+  ui[Streamlit UI]
+  orch[Orchestrator API]
+  sess[Session messages]
+  graph[Agent graph]
+  llm[Chat LLM]
+  ret[Retriever API]
+
+  ui -->|POST /v1/chat| orch
+  orch --> sess
+  orch --> graph
+  graph --> llm
+  graph --> ret
+```
+
+**Workflow** — what happens for **one** user message (simplified; the graph may loop on tools until it finishes).
+
+```mermaid
+flowchart TD
+  a[User message in UI] --> b[Orchestrator loads prior session messages]
+  b --> c[Graph ingests query and resets per-turn doc state]
+  c --> d[LLM chooses a tool or replies]
+  d --> e{Tool?}
+  e -->|retrieve| f[Call Retriever HTTP POST /v1/retrieve]
+  f --> g[Merge chunks into graph state]
+  g --> d
+  e -->|ask_clarify| h[Return clarify reply to user]
+  e -->|finalize_answer| i[Grounded answer from merged context]
+  e -->|no tool| j[Direct text reply if any]
+  i --> k[Save messages to session]
+  h --> k
+  j --> k
+  k --> l[HTTP response to UI]
+```
+
+Details: `retrieve` may run multiple times per turn (up to `ETB_AGENT_MAX_RETRIEVE`); `finalize_answer` ends grounded answering. Guardrails (`ETB_AGENT_MAX_STEPS`, `ETB_AGENT_MAX_CONTEXT_CHARS`) are enforced inside [`agent_graph.py`](../src/etb_project/orchestrator/agent_graph.py).
+
+**LangGraph Studio** ([`studio_entry.py`](../src/etb_project/studio_entry.py)) builds the same graph with **`RemoteRetriever`** only (`RETRIEVER_BASE_URL` required).
+
 - **Retriever** (`etb_project.api`): dual FAISS retrieval, PDF indexing, serves files from `ETB_DOCUMENT_OUTPUT_DIR` under `/v1/assets/...`.
 - **UI** (`app.py`): talks only to the orchestrator (chat + assets).
 
-### CLI / developer flow (no HTTP retriever)
+### CLI / developer flow
 
 ```mermaid
 flowchart LR
@@ -118,16 +160,19 @@ flowchart LR
   Mode -->|local| Load[Load FAISS from disk]
   Mode -->|remote| Client[RemoteRetriever HTTP client]
   Load --> Dual[DualRetriever]
-  Client --> Dual
+  Client --> Ret[Retriever invoke]
+  Dual --> Ret
   Main --> Q{query set?}
   Q -->|yes| Snip[Log retrieval snippets only]
-  Q -->|no| RAG2[LangGraph RAG]
+  Q -->|no| RAG2[Agent graph plus same retriever]
+  Ret --> Snip
+  Ret --> RAG2
   RAG2 --> OllamaLLM[Ollama chat LLM]
 ```
 
 - **Config** (`etb_project.config`): `AppConfig` — `pdf`, `query`, `retriever_k`, `log_level`, `vector_store_path`, captioning keys.
 - **Remote retriever client** (`etb_project.retrieval.remote_retriever.RemoteRetriever`): `POST /v1/retrieve` to the retriever service.
-- **LangGraph RAG** (`etb_project.graph_rag`): used only in **interactive** mode; paired with **Ollama** chat in `main`, not with `get_chat_llm()` (orchestrator uses `get_chat_llm()` for OpenAI-compat / OpenRouter).
+- **Agent graph** (`etb_project.orchestrator.agent_graph`): interactive CLI (**local or remote** retriever), LangGraph Studio (**remote** only), HTTP orchestrator; **Ollama** chat in `main` / Studio; orchestrator uses `get_chat_llm()` for OpenAI-compat / OpenRouter.
 
 ### Standalone retriever API
 

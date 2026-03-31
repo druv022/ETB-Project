@@ -54,7 +54,8 @@ def test_chat_happy_path_returns_answer_and_sources(client: TestClient) -> None:
         return G()
 
     with patch(
-        "etb_project.orchestrator.app.build_rag_graph", side_effect=fake_build_graph
+        "etb_project.orchestrator.app.build_agent_orchestrator_graph",
+        side_effect=fake_build_graph,
     ):
         r = client.post(
             "/v1/chat",
@@ -84,7 +85,8 @@ def test_chat_clarify_phase_empty_sources(client: TestClient) -> None:
         return G()
 
     with patch(
-        "etb_project.orchestrator.app.build_rag_graph", side_effect=fake_build_graph
+        "etb_project.orchestrator.app.build_agent_orchestrator_graph",
+        side_effect=fake_build_graph,
     ):
         r = client.post(
             "/v1/chat",
@@ -106,7 +108,8 @@ def test_chat_returns_502_on_empty_answer(client: TestClient) -> None:
         return G()
 
     with patch(
-        "etb_project.orchestrator.app.build_rag_graph", side_effect=fake_build_graph
+        "etb_project.orchestrator.app.build_agent_orchestrator_graph",
+        side_effect=fake_build_graph,
     ):
         r = client.post("/v1/chat", json={"session_id": "s1", "message": "q"})
     assert r.status_code == 502

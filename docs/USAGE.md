@@ -37,9 +37,10 @@ There is **no LangGraph** invocation and **no LLM** in this path. It is useful t
 
 If `query` is empty, the app:
 
-- Builds the same retriever as above
+- Builds the same retriever as above (**local** dual FAISS or **remote** HTTP)
 - Enters a **read–eval loop**: you type a question on stdin
-- Each line is passed through the **LangGraph** RAG graph: `ingest_query → retrieve_rag → generate_answer`
+- Each line runs the same **agentic** LangGraph as the orchestrator ([`agent_graph.py`](../src/etb_project/orchestrator/agent_graph.py)): tools `retrieve`, `ask_clarify`, and `finalize_answer`, with limits from [`load_orchestrator_settings()`](../src/etb_project/orchestrator/settings.py) (env vars such as `ETB_AGENT_MAX_RETRIEVE`, etc.)
+- **Multi-turn:** After each turn, the graph’s `messages` list is kept and passed into the next invocation (same pattern as orchestrator session storage), with a fixed `session_id` of `cli` and a fresh `request_id` per line for logging.
 - The **chat model** is **`get_ollama_llm()`** from [`models.py`](../src/etb_project/models.py) (Ollama `ChatOllama`), honoring `OLLAMA_HOST` / `OLLAMA_BASE_URL`, `OLLAMA_CHAT_MODEL`, `OLLAMA_TEMPERATURE`
 
 **Important:** The interactive CLI does **not** use `ETB_LLM_PROVIDER` or OpenAI-compatible / OpenRouter settings. Those apply to the **Orchestrator API** (`get_chat_llm()`), not to `etb_project.main`. To use OpenRouter in a chat UI, run Docker Compose and talk to the **orchestrator**, or extend `main.py` to call `get_chat_llm()` instead of `get_ollama_llm()`.

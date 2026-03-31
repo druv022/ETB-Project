@@ -17,6 +17,8 @@ class SourceOut(BaseModel):
 
 
 class ChatRequest(BaseModel):
+    """One user turn for the agentic orchestrator (history is server-side per ``session_id``)."""
+
     session_id: str = Field(min_length=1)
     message: str = Field(min_length=1)
     k: int | None = Field(default=None, ge=1)
@@ -24,6 +26,8 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
+    """Agent reply; ``phase`` distinguishes clarify-only vs grounded answer paths."""
+
     answer: str
     sources: list[SourceOut] = Field(default_factory=list)
     request_id: str | None = None

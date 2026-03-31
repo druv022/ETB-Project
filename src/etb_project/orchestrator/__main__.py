@@ -1,4 +1,7 @@
-"""Run the orchestrator API with uvicorn: ``python -m etb_project.orchestrator``."""
+"""Run the orchestrator API with uvicorn: ``python -m etb_project.orchestrator``.
+
+Loads ``create_app`` (agentic ``POST /v1/chat``, health, asset proxy). Bind via ``ETB_ORCH_HOST`` / ``PORT`` / ``ETB_ORCH_PORT``.
+"""
 
 from __future__ import annotations
 

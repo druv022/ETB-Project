@@ -1,16 +1,22 @@
-"""Main entry point for ETB-project."""
+"""Main entry point for ETB-project.
+
+Supports retrieval-only runs (``query`` in YAML), or interactive agent mode (empty ``query``)
+using ``build_agent_orchestrator_graph`` with local ``DualRetriever`` or ``RemoteRetriever``.
+"""
 
 import logging
 import os
+import uuid
 from pathlib import Path
 from typing import Any
 
 from langchain_core.messages import AIMessage
 
 from etb_project.config import load_config
-from etb_project.graph_rag import build_rag_graph
 from etb_project.models import get_ollama_embedding_model as get_embeddings
 from etb_project.models import get_ollama_llm as get_llm
+from etb_project.orchestrator.agent_graph import build_agent_orchestrator_graph
+from etb_project.orchestrator.settings import load_orchestrator_settings
 from etb_project.retrieval import DualRetriever, RemoteRetriever
 from etb_project.vectorstore.faiss_backend import FaissDualVectorStoreBackend
 
@@ -20,6 +26,9 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Fixed session id for interactive CLI (multi-turn message history matches orchestrator pattern).
+_CLI_SESSION_ID = "cli"
 
 
 def _get_agent_reply(state: dict[str, Any]) -> str:
@@ -103,7 +112,7 @@ def _build_local_retriever(config: Any) -> DualRetriever:
 
 
 def main() -> None:
-    """Load config, load persisted dual vector DB, run query or loop."""
+    """Load config, load persisted dual vector DB, run query or agent loop."""
     config = load_config()
     logging.getLogger().setLevel(getattr(logging, config.log_level, logging.INFO))
     logger.info("Starting ETB-project")
@@ -137,13 +146,25 @@ def main() -> None:
             logger.info("Result %d: %s", i, snippet)
         return
 
-    # Interactive query loop using LangGraph
+    # Interactive agent loop: same LangGraph as the orchestrator; local DualRetriever or
+    # RemoteRetriever (HTTP). Conversation history is carried across stdin lines like
+    # orchestrator session messages.
     logger.info("Enter a query (empty line to exit).")
     agent_llm = get_llm()
-    rag_graph = build_rag_graph(
-        llm=agent_llm, retriever=retriever, enable_orion_gate=False
+    orch = load_orchestrator_settings()
+    rag_graph = build_agent_orchestrator_graph(
+        llm=agent_llm,
+        retriever=retriever,
+        max_retrieve=orch.agent_max_retrieve,
+        max_steps=orch.agent_max_steps,
+        max_context_chars=orch.agent_max_context_chars,
     )
+    if mode == "remote":
+        logger.info("Interactive agent mode (remote HTTP retriever)")
+    else:
+        logger.info("Interactive agent mode (local DualRetriever)")
 
+    messages: list[Any] = []
     while True:
         try:
             line = input("Query: ").strip()
@@ -152,7 +173,15 @@ def main() -> None:
         if not line:
             return
 
-        result = rag_graph.invoke({"query": line})
+        initial: dict[str, Any] = {
+            "query": line,
+            "messages": messages,
+            "session_id": _CLI_SESSION_ID,
+            "request_id": str(uuid.uuid4()),
+        }
+        result = rag_graph.invoke(initial)
+        if isinstance(result.get("messages"), list):
+            messages = result["messages"]
         reply = _get_agent_reply(result)
         if reply:
             print(reply)

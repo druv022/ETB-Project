@@ -1,13 +1,14 @@
 """FastAPI Orchestrator service for chat-style RAG.
 
-This service:
-- Receives chat messages from the UI
-- Retrieves context via the standalone Retriever API (remote mode)
-- Generates an answer using an OpenAI-compatible chat backend
+Exposes ``POST /v1/chat``, which loads session history, builds
+``build_agent_orchestrator_graph`` with ``RemoteRetriever`` + ``get_chat_llm()``,
+runs ``graph.invoke`` in a thread pool, then persists returned messages for the
+next turn. Asset routes proxy to the retriever for UI images.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 import uuid
@@ -22,8 +23,8 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
-from etb_project.graph_rag import build_rag_graph
 from etb_project.models import get_chat_llm
+from etb_project.orchestrator.agent_graph import build_agent_orchestrator_graph
 from etb_project.orchestrator.exceptions import OrchestratorAPIError
 from etb_project.orchestrator.schemas import (
     ChatRequest,
@@ -106,6 +107,7 @@ def _error_response(
 
 
 def _build_retriever(settings: OrchestratorSettings, k: int) -> RemoteRetriever:
+    """HTTP client for ``POST /v1/retrieve`` on the standalone retriever service."""
     if not settings.retriever_base_url:
         raise OrchestratorAPIError(
             500,
@@ -134,7 +136,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="ETB Orchestrator API",
         version="1.0.0",
-        description="Chat orchestration service (LangGraph RAG + remote retriever).",
+        description="Chat orchestration service (agentic LangGraph + HTTP retriever).",
         lifespan=lifespan,
     )
     app.add_middleware(RequestLoggingMiddleware)
@@ -248,17 +250,34 @@ def create_app() -> FastAPI:
         settings: OrchestratorSettings = Depends(get_settings),
         sessions: InMemorySessionStore = Depends(get_sessions),
     ) -> ChatResponse:
+        # One request = one user turn; graph is rebuilt cheaply but retriever/LLM are fresh each time.
         rid = getattr(request.state, "request_id", None)
         k = body.k or settings.default_k
 
         retriever = _build_retriever(settings, k=k)
         llm = get_chat_llm()
-        graph = build_rag_graph(llm=llm, retriever=retriever)
-
         prior = deserialize_messages(sessions.get_messages(body.session_id))
-        result: dict[str, Any] = graph.invoke(
-            {"query": body.message, "messages": prior}
+
+        logger.info(
+            "chat request_id=%s session_id=%s",
+            rid,
+            body.session_id,
         )
+        graph = build_agent_orchestrator_graph(
+            llm=llm,
+            retriever=retriever,
+            max_retrieve=settings.agent_max_retrieve,
+            max_steps=settings.agent_max_steps,
+            max_context_chars=settings.agent_max_context_chars,
+        )
+        initial: dict[str, Any] = {
+            "query": body.message,
+            "messages": prior,
+            "request_id": rid,
+            "session_id": body.session_id,
+        }
+        # LangGraph invoke is synchronous; avoid blocking the event loop.
+        result = await asyncio.to_thread(graph.invoke, initial)
         answer = (result.get("answer") or "").strip()
         if not answer:
             raise OrchestratorAPIError(
@@ -269,11 +288,13 @@ def create_app() -> FastAPI:
 
         messages = result.get("messages")
         if isinstance(messages, list):
+            # Full thread including tool messages; next chat request deserializes as ``prior``.
             sessions.set_messages(body.session_id, serialize_messages(messages))
 
         sources: list[SourceOut] = []
         if body.return_sources:
-            docs = result.get("context_docs") or []
+            # Prefer context_docs (post-truncation) for grounded answer; else accumulated_docs.
+            docs = result.get("context_docs") or result.get("accumulated_docs") or []
             for d in docs:
                 try:
                     sources.append(
@@ -286,6 +307,7 @@ def create_app() -> FastAPI:
                     continue
 
         rt = result.get("route")
+        # clarify: ask_clarify short-circuit; answer: finalize or fallback ending with a reply.
         phase: Literal["clarify", "answer"] = "clarify" if rt == "clarify" else "answer"
 
         return ChatResponse(answer=answer, sources=sources, request_id=rid, phase=phase)

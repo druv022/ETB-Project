@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class RemoteRetriever:
-    """Implements ``invoke(query) -> list[Document]`` for ``build_rag_graph``."""
+    """HTTP client for ``POST /v1/retrieve``; used by the agent orchestrator and CLI."""
 
     def __init__(
         self,

@@ -39,23 +39,22 @@ If you use **uv** and `uv.lock`:
 uv sync --all-extras
 ```
 
-### Conda (`ETB` environment)
+### Conda (recommended: `etb` env)
 
-If you use Miniconda/Anaconda, activate the **`ETB`** environment (create it first if needed), then install as above:
+If you use Miniconda/Anaconda, create or activate a dedicated env (e.g. **`etb`**), then install as above:
 
 ```bash
-conda activate ETB
+conda activate etb
 pip install -r requirements.txt
 pip install -r requirements-dev.txt
 pip install -e .
 ```
 
-Run tests without manually activating (use your env name: **`ETB`**, **`etb`**, or whatever you created):
+Run tests without manually activating (replace `etb` with your env name if different):
 
 ```bash
-conda run -n ETB pytest
-# or
 conda run -n etb pytest
+conda run -n etb python -m pytest tests/ -q
 ```
 
 ## Quickstart
@@ -68,7 +67,7 @@ conda run -n etb pytest
 docker compose up --build
 ```
 
-The repo ships a **standalone retriever HTTP API** (retrieve + index PDFs). The **LangGraph RAG** graph runs in the **orchestrator**, not in the retriever. The orchestrator can run an **Orion** clarification step before retrieval (`ETB_ORION_CLARIFY`, default on); see [`docs/ORCHESTRATOR_API.md`](docs/ORCHESTRATOR_API.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+The repo ships a **standalone retriever HTTP API** (retrieve + index PDFs). The **agentic** LangGraph runs in the **orchestrator** (tool-calling `retrieve` / `ask_clarify` / `finalize_answer`), not in the retriever; the orchestrator calls the retriever only via **HTTP** (`POST /v1/retrieve`). See [`docs/ORCHESTRATOR_API.md`](docs/ORCHESTRATOR_API.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 3. Open the UI:
 
@@ -86,11 +85,18 @@ curl http://localhost:8000/v1/health
 curl http://localhost:8000/v1/ready
 ```
 
-- **Use the RAG orchestrator against the retriever**:
+- **Interactive CLI with the HTTP retriever** (same agent graph as the orchestrator; set `query: ""` in config):
 
 ```bash
 export ETB_RETRIEVER_MODE=remote
 export RETRIEVER_BASE_URL=http://localhost:8000
+python -m etb_project.main
+```
+
+- **Interactive CLI with local FAISS** (debug without the retriever service; requires built `vector_store_path`):
+
+```bash
+# default ETB_RETRIEVER_MODE=local
 python -m etb_project.main
 ```
 
@@ -133,7 +139,7 @@ ETB-Project/
 │       ├── retrieval/
 │       ├── vectorstore/
 │       ├── main.py
-│       ├── graph_rag.py
+│       ├── orchestrator/agent_graph.py  # agentic LangGraph (chat)
 │       └── ...
 ├── docker/                   # Ollama entrypoint / healthchecks
 ├── docs/                     # Start with docs/README.md

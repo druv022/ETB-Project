@@ -2,7 +2,7 @@
 
 The Orchestrator API is the **chat/RAG** service for ETB-project.
 
-- **In scope**: session-aware chat endpoint, LangGraph RAG orchestration, LLM answer generation, calling the Retriever API for context
+- **In scope**: session-aware chat endpoint, agentic LangGraph orchestration (tool-calling retrieve / clarify / answer), LLM answer generation, calling the Retriever API for context over HTTP
 - **Out of scope**: PDF indexing and vector-store persistence (handled by the Retriever API)
 
 ### Run (Docker)
@@ -72,17 +72,17 @@ Response body:
 
 (`phase` is `"answer"` after a normal retrieve-and-answer turn.)
 
-- **`phase`**: `"clarify"` when Orion returned a clarification only (no retrieval); `"answer"` when retrieval and grounded answering ran. Omitted or `null` in older clients; always set by the current server.
+- **`phase`**: `"clarify"` when the agent’s `ask_clarify` tool ran (no retrieval); `"answer"` when the model produced a grounded answer (typically after `finalize_answer`).
 
-When Orion clarification is active (`ETB_ORION_CLARIFY=1`, default), a **clarify** turn returns **`sources: []`** because the retriever was not called.
+A **clarify** turn returns **`sources: []`** because the retriever HTTP API was not called.
 
 ### Configuration (environment variables)
 
-**Orion (pre-retrieval clarification)**:
+**Agent graph** (tool-calling LangGraph: `retrieve` / `ask_clarify` / `finalize_answer`):
 
-- `ETB_ORION_CLARIFY`
-  - `1` (default): run the Orion `orion_gate` node before retrieval in the orchestrator LangGraph.
-  - `0`, `false`, `no`, or `off`: skip Orion and go straight to retrieve + answer (same as the CLI default for `build_rag_graph(..., enable_orion_gate=False)`).
+- `ETB_AGENT_MAX_RETRIEVE` (default `4`): max `retrieve` tool calls per user message.
+- `ETB_AGENT_MAX_STEPS` (default `10`): max LLM tool-loop iterations; exceeding triggers forced grounded answer with a step-limit disclaimer.
+- `ETB_AGENT_MAX_CONTEXT_CHARS` (default `48000`): merged context size before generation (first-seen truncation).
 
 Service wiring:
 

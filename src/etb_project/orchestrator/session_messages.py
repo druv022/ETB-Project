@@ -1,4 +1,9 @@
-"""Serialize LangChain messages for ``InMemorySessionStore`` (JSON-friendly dicts)."""
+"""Serialize LangChain messages for ``InMemorySessionStore`` (JSON-friendly dicts).
+
+HTTP chat loads ``prior`` via ``deserialize_messages``, runs the graph, then
+``serialize_messages`` on the result for the next request. Same message types are
+used by the interactive CLI when it passes prior ``messages`` between stdin lines.
+"""
 
 from __future__ import annotations
 
@@ -30,6 +35,7 @@ def serialize_messages(messages: list[Any] | None) -> list[dict[str, Any]]:
         if isinstance(m, BaseMessage):
             normalized.append(m)
         elif isinstance(m, dict):
+            # LangChain dict rows include "type"; bare dicts may come from older clients.
             if m.get("type"):
                 normalized.extend(messages_from_dict([m]))
             else:
