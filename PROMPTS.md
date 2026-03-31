@@ -118,3 +118,5 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-03-31**: `The issue is not fixed rather worsen. The source disappears after pressing toggle. Test in the cursor browser and verify is that the best user experince ? Fix it accordingly.` (Context: revert toggle-based Sources visibility (bad UX) and restore a Sources expander that stays open during reruns caused by per-source radio interactions; verify in Cursor browser.)
 
 - **2026-03-31**: `Fix image rendering after Docker deploy` (Context: implement plan — `asset_path` relative to top-level `ETB_DOCUMENT_OUTPUT_DIR` when indexing multiple PDFs; Docker `ETB_DOCUMENT_OUTPUT_DIR`/`ETB_UPLOAD_DIR`; UI derives asset paths from stored absolute paths, forwards bearer token for `/v1/assets`, tests and docs.)
+
+- **2026-03-31**: `use conda etb environment` (Context: document the **`ETB`** conda env in README; run pytest with `conda run -n ETB`; fix `_serialize_metadata` to use `_json_safe` so nested `image_captions` stay JSON-shaped for the retriever API test.)

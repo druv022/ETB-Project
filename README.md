@@ -33,6 +33,23 @@ pip install -r requirements-dev.txt
 pip install -e .
 ```
 
+### Conda (`ETB` environment)
+
+If you use Miniconda/Anaconda, activate the **`ETB`** environment (create it first if needed), then install as above:
+
+```bash
+conda activate ETB
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+pip install -e .
+```
+
+Run tests without manually activating:
+
+```bash
+conda run -n ETB pytest
+```
+
 ## Quickstart
 
 1) Create a `.env` with at least:
