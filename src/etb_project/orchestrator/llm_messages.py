@@ -5,15 +5,39 @@ Used by ``agent_graph._grounded_generation_update`` (finalize_answer, fallbacks,
 
 from __future__ import annotations
 
+import re
+
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage, HumanMessage
+
+
+def strip_llm_tool_markup(text: str) -> str:
+    """Remove XML-like ``tool_call`` / ``function`` / ``parameter`` wrappers from model text.
+
+    Some chat models emit fake tool-call markup as plain string content, e.g.
+    ``<tool_call><function=finalize_answer><parameter=answer>...</parameter></function></tool_call>``.
+    """
+    if not text:
+        return text
+    s = text.strip()
+    m = re.search(
+        r"<parameter\s*=\s*answer\s*>([\s\S]*?)</parameter\s*>",
+        s,
+        re.IGNORECASE,
+    )
+    if m:
+        return m.group(1).strip()
+    s = re.sub(r"</?tool_call[^>]*>", "", s, flags=re.IGNORECASE)
+    s = re.sub(r"</?function[^>]*>", "", s, flags=re.IGNORECASE)
+    s = re.sub(r"</?parameter[^>]*>", "", s, flags=re.IGNORECASE)
+    return s.strip()
 
 
 def extract_text_from_ai_message(message: AIMessage) -> str:
     """Extract plain text from an AIMessage, handling list-based content."""
     content = getattr(message, "content", None) or getattr(message, "text", "")
     if isinstance(content, str):
-        return content.strip()
+        return strip_llm_tool_markup(content.strip())
     if isinstance(content, list):
         parts: list[str] = []
         for block in content:
@@ -25,8 +49,8 @@ def extract_text_from_ai_message(message: AIMessage) -> str:
                 text = str(block).strip()
                 if text:
                     parts.append(text)
-        return " ".join(parts).strip()
-    return str(content).strip()
+        return strip_llm_tool_markup(" ".join(parts).strip())
+    return strip_llm_tool_markup(str(content).strip())
 
 
 def build_grounded_answer_human_message(
@@ -100,5 +124,6 @@ def truncate_documents_by_chars(
 __all__ = [
     "build_grounded_answer_human_message",
     "extract_text_from_ai_message",
+    "strip_llm_tool_markup",
     "truncate_documents_by_chars",
 ]

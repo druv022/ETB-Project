@@ -16,6 +16,7 @@ from etb_project.config import load_config
 from etb_project.models import get_ollama_embedding_model as get_embeddings
 from etb_project.models import get_ollama_llm as get_llm
 from etb_project.orchestrator.agent_graph import build_agent_orchestrator_graph
+from etb_project.orchestrator.llm_messages import strip_llm_tool_markup
 from etb_project.orchestrator.settings import load_orchestrator_settings
 from etb_project.retrieval import DualRetriever, RemoteRetriever
 from etb_project.vectorstore.faiss_backend import FaissDualVectorStoreBackend
@@ -35,14 +36,14 @@ def _get_agent_reply(state: dict[str, Any]) -> str:
     """Extract the final reply from the LangGraph state."""
     answer = state.get("answer")
     if isinstance(answer, str) and answer.strip():
-        return answer.strip()
+        return strip_llm_tool_markup(answer.strip())
 
     messages = state.get("messages") or []
     for msg in reversed(messages):
         if isinstance(msg, AIMessage):
             content = getattr(msg, "content", None) or getattr(msg, "text", "")
             if isinstance(content, str) and content.strip():
-                return content.strip()
+                return strip_llm_tool_markup(content.strip())
             if isinstance(content, list):
                 parts = [
                     block.get("text", block) if isinstance(block, dict) else str(block)
@@ -50,7 +51,7 @@ def _get_agent_reply(state: dict[str, Any]) -> str:
                 ]
                 text = " ".join(p for p in parts if isinstance(p, str) and p.strip())
                 if text:
-                    return text.strip()
+                    return strip_llm_tool_markup(text.strip())
     return ""
 
 

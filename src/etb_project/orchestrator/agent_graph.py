@@ -4,10 +4,15 @@ Graph shape: ``ingest`` (append user query, reset per-turn doc state) → ``befo
 (routing) → ``invoke_agent`` (LLM with bound tools) → ``execute_tools`` or
 ``handle_no_tools`` → loop or ``END``. Real retrieval uses ``retriever.invoke(query)``;
 ``@tool`` bodies below are placeholders for LangChain tool schemas only.
+
+Retrieved chunks are merged in ``_merge_documents`` using **content** (SHA-256 of
+stripped text), not ``source``/``chunk_id`` keys, so multiple chunks from the same
+file (e.g. text vs image captions) are not collapsed.
 """
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 from typing import Annotated, Any, Literal
@@ -34,33 +39,105 @@ from etb_project.orchestrator.agent_system_prompt import (
 from etb_project.orchestrator.llm_messages import (
     build_grounded_answer_human_message,
     extract_text_from_ai_message,
+    strip_llm_tool_markup,
     truncate_documents_by_chars,
 )
 
 logger = logging.getLogger(__name__)
 
+# Minimum suffix/prefix match length to merge consecutive chunks (sliding-window overlap).
+_MIN_BOUNDARY_OVERLAP_CHARS = 15
 
-def _doc_dedupe_key(doc: Document) -> str:
-    """Stable key for merge/dedupe across repeated retrieve calls."""
-    md = doc.metadata or {}
-    for k in ("chunk_id", "id", "source"):
-        if k in md and md[k] is not None:
-            return f"{k}:{md[k]}"
-    text = (doc.page_content or "")[:200]
-    return f"hash:{hash(text)}"
+
+def _content_fingerprint(text: str) -> str:
+    """SHA-256 hex of stripped UTF-8 text — stable across processes (unlike ``hash()``)."""
+    t = (text or "").strip()
+    return hashlib.sha256(t.encode("utf-8", errors="replace")).hexdigest()
+
+
+def _filter_subsumed_by_content(docs: list[Document]) -> list[Document]:
+    """Drop shorter chunks whose stripped text is strictly contained in another chunk."""
+    n = len(docs)
+    if n <= 1:
+        return docs
+    texts = [(d.page_content or "").strip() for d in docs]
+    removed = [False] * n
+    for i in range(n):
+        if not texts[i]:
+            continue
+        for j in range(n):
+            if i == j or removed[i]:
+                break
+            if not texts[j]:
+                continue
+            li, lj = len(texts[i]), len(texts[j])
+            if li < lj and texts[i] in texts[j]:
+                removed[i] = True
+                break
+    return [docs[i] for i in range(n) if not removed[i]]
+
+
+def _merge_boundary_if_overlap(
+    left: str, right: str, *, min_overlap: int
+) -> str | None:
+    """If ``left`` ends with a prefix of ``right``, return ``left + right[k:]``."""
+    if not left or not right:
+        return None
+    max_k = min(len(left), len(right))
+    for k in range(max_k, min_overlap - 1, -1):
+        if left[-k:] == right[:k]:
+            return left + right[k:]
+    return None
+
+
+def _merge_consecutive_overlaps(
+    docs: list[Document], *, min_overlap: int = _MIN_BOUNDARY_OVERLAP_CHARS
+) -> list[Document]:
+    """Merge consecutive chunks that share a long suffix/prefix (RAG window overlap)."""
+    if not docs:
+        return []
+    out: list[Document] = [docs[0]]
+    for d in docs[1:]:
+        left_text = out[-1].page_content or ""
+        right_text = d.page_content or ""
+        merged_text = _merge_boundary_if_overlap(
+            left_text, right_text, min_overlap=min_overlap
+        )
+        if merged_text is not None:
+            out[-1] = Document(
+                page_content=merged_text,
+                metadata=dict(out[-1].metadata or {}),
+            )
+        else:
+            out.append(d)
+    return out
 
 
 def _merge_documents(
     existing: list[Document], new_docs: list[Document]
 ) -> list[Document]:
-    keys = {_doc_dedupe_key(d) for d in existing}
-    out = list(existing)
-    for d in new_docs:
-        k = _doc_dedupe_key(d)
-        if k not in keys:
-            keys.add(k)
-            out.append(d)
-    return out
+    """Merge chunks from repeated ``retrieve`` calls.
+
+    1. Exact duplicate (same stripped text, by SHA-256) — keep first only.
+    2. Shorter text fully contained in a longer chunk — drop the shorter.
+    3. Consecutive chunks with boundary overlap (>= ``_MIN_BOUNDARY_OVERLAP_CHARS``) — merge text.
+    """
+    combined = list(existing) + list(new_docs)
+    if not combined:
+        return []
+
+    seen_fp: set[str] = set()
+    exact_deduped: list[Document] = []
+    for d in combined:
+        t = (d.page_content or "").strip()
+        fp = _content_fingerprint(t)
+        if fp in seen_fp:
+            continue
+        seen_fp.add(fp)
+        exact_deduped.append(d)
+
+    subsumed_filtered = _filter_subsumed_by_content(exact_deduped)
+    return _merge_consecutive_overlaps(subsumed_filtered)
 
 
 # Schemas for ``llm.bind_tools``; execution is implemented in ``execute_tools``.
@@ -180,7 +257,7 @@ def _grounded_generation_update(
         delta.append(response)
         answer_text = extract_text_from_ai_message(response)
     else:
-        answer_text = str(response).strip()
+        answer_text = strip_llm_tool_markup(str(response).strip())
     if answer_prefix:
         answer_text = f"{answer_prefix}\n{answer_text}"
     out: AgentOrchestratorState = {
@@ -305,7 +382,9 @@ def build_agent_orchestrator_graph(
                     )
                     continue
                 clarify_used = True
-                body = msg_text or "Could you clarify your request?"
+                body = strip_llm_tool_markup(
+                    msg_text or "Could you clarify your request?"
+                )
                 audit.append({"tool": "ask_clarify", "query": query_text, "k": 0})
                 tm = ToolMessage(
                     content="Clarifying question recorded.", tool_call_id=tid

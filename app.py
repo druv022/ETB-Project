@@ -6,6 +6,7 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 
+from etb_project.orchestrator.llm_messages import strip_llm_tool_markup
 from etb_project.ui.asset_paths import (
     asset_request_headers,
     derive_asset_path_from_stored_path,
@@ -44,7 +45,7 @@ def call_orchestrator_chat(message: str) -> tuple[str, list[dict]]:
             [],
         )
     data = response.json() if response.content else {}
-    answer = str(data.get("answer") or "").strip()
+    answer = strip_llm_tool_markup(str(data.get("answer") or "").strip())
     sources = data.get("sources") or []
     if not answer:
         answer = "Orion did not receive a valid answer from the Orchestrator."

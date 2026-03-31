@@ -26,6 +26,7 @@ from starlette.middleware.cors import CORSMiddleware
 from etb_project.models import get_chat_llm
 from etb_project.orchestrator.agent_graph import build_agent_orchestrator_graph
 from etb_project.orchestrator.exceptions import OrchestratorAPIError
+from etb_project.orchestrator.llm_messages import strip_llm_tool_markup
 from etb_project.orchestrator.schemas import (
     ChatRequest,
     ChatResponse,
@@ -278,7 +279,7 @@ def create_app() -> FastAPI:
         }
         # LangGraph invoke is synchronous; avoid blocking the event loop.
         result = await asyncio.to_thread(graph.invoke, initial)
-        answer = (result.get("answer") or "").strip()
+        answer = strip_llm_tool_markup((result.get("answer") or "").strip())
         if not answer:
             raise OrchestratorAPIError(
                 502,
