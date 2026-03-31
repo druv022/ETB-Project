@@ -95,6 +95,7 @@ def build_dual_vectorstores_from_pdfs(
             output_dir=per_pdf_output_dir,
             chunking_config=chunking_config,
             image_captioner=image_captioner,
+            asset_path_root=output_dir,
         )
         aggregated_text_docs.extend(text_docs)
         aggregated_caption_docs.extend(caption_docs)
@@ -215,6 +216,7 @@ def append_to_and_persist_index_for_pdfs(
             output_dir=per_pdf_output_dir,
             chunking_config=chunking_config,
             image_captioner=image_captioner,
+            asset_path_root=output_dir,
         )
         if text_docs:
             append_documents_to_faiss(existing_text_vectorstore, text_docs)

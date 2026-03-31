@@ -6,6 +6,11 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 
+from etb_project.ui.asset_paths import (
+    asset_request_headers,
+    derive_asset_path_from_stored_path,
+)
+
 load_dotenv()
 
 
@@ -106,20 +111,85 @@ def _orchestrator_base_url() -> str:
     return os.getenv("ORCHESTRATOR_BASE_URL", "http://localhost:8001").rstrip("/")
 
 
+def _asset_auth_configured() -> bool:
+    return bool(
+        (
+            os.getenv("RETRIEVER_API_KEY")
+            or os.getenv("ORCHESTRATOR_ASSET_BEARER_TOKEN")
+            or ""
+        ).strip()
+    )
+
+
 @st.cache_data(show_spinner=False, ttl=3600)
-def _fetch_asset_bytes(asset_path: str) -> tuple[bytes, str] | None:
+def _fetch_asset_bytes_cached(
+    asset_path: str, _auth_configured: bool
+) -> tuple[bytes, str] | None:
     if not asset_path.strip():
         return None
     base = _orchestrator_base_url()
     url = f"{base}/v1/assets/{asset_path.lstrip('/')}"
+    headers = asset_request_headers() if _auth_configured else {}
     try:
-        resp = requests.get(url, timeout=30)
+        resp = requests.get(url, timeout=30, headers=headers)
     except requests.RequestException:
         return None
     if resp.status_code != 200:
         return None
     ctype = resp.headers.get("content-type") or "application/octet-stream"
     return resp.content, ctype
+
+
+def _fetch_asset_bytes(asset_path: str) -> tuple[bytes, str] | None:
+    """Fetch image bytes via orchestrator proxy; includes auth when configured."""
+    return _fetch_asset_bytes_cached(asset_path, _asset_auth_configured())
+
+
+def _candidate_asset_paths_from_record(rec: dict[str, Any]) -> list[str]:
+    """Ordered list of paths to try for ``/v1/assets/...``."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for key in ("asset_path",):
+        v = rec.get(key)
+        if isinstance(v, str) and v.strip():
+            s = v.strip().lstrip("/")
+            if s not in seen:
+                seen.add(s)
+                out.append(s)
+    p = rec.get("path")
+    if isinstance(p, str) and p.strip():
+        derived = derive_asset_path_from_stored_path(p)
+        if derived and derived not in seen:
+            seen.add(derived)
+            out.append(derived)
+    return out
+
+
+def _candidate_asset_paths_from_metadata(meta: dict[str, Any]) -> list[str]:
+    """Ordered candidates for single-image metadata (caption docs)."""
+    seen: set[str] = set()
+    out: list[str] = []
+    ap = meta.get("asset_path")
+    if isinstance(ap, str) and ap.strip():
+        s = ap.strip().lstrip("/")
+        if s not in seen:
+            seen.add(s)
+            out.append(s)
+    p = meta.get("path")
+    if isinstance(p, str) and p.strip():
+        derived = derive_asset_path_from_stored_path(p)
+        if derived and derived not in seen:
+            seen.add(derived)
+            out.append(derived)
+    return out
+
+
+def _fetch_first_working_asset(candidates: list[str]) -> tuple[bytes, str] | None:
+    for c in candidates:
+        got = _fetch_asset_bytes(c)
+        if got is not None:
+            return got
+    return None
 
 
 def _safe_path(value: Any) -> Path | None:
@@ -162,13 +232,16 @@ def _extract_image_caption_records(meta: dict[str, Any]) -> list[dict[str, str]]
         caption = rec.get("caption")
         if not isinstance(caption, str) or not caption.strip():
             continue
-        if isinstance(asset_path, str) and asset_path.strip():
-            out.append(
-                {"asset_path": asset_path, "path": str(path or ""), "caption": caption}
-            )
-            continue
+        merged: dict[str, str] = {"caption": caption}
         if isinstance(path, str) and path.strip():
-            out.append({"path": path, "caption": caption})
+            merged["path"] = path
+        if isinstance(asset_path, str) and asset_path.strip():
+            merged["asset_path"] = asset_path
+        elif isinstance(path, str) and path.strip():
+            derived = derive_asset_path_from_stored_path(path)
+            if derived:
+                merged["asset_path"] = derived
+        out.append(merged)
     return out
 
 
@@ -178,33 +251,34 @@ def _render_images_tab(content: str, meta: dict[str, Any]) -> None:
         cols = st.columns(3)
         for idx, rec in enumerate(image_caps):
             with cols[idx % 3]:
-                asset_path = rec.get("asset_path")
-                if isinstance(asset_path, str) and asset_path.strip():
-                    fetched = _fetch_asset_bytes(asset_path)
-                    if fetched is not None:
-                        data, ctype = fetched
-                        st.image(data, use_container_width=True)
-                    else:
-                        st.caption("Failed to load image.")
+                candidates = _candidate_asset_paths_from_record(rec)
+                fetched = _fetch_first_working_asset(candidates)
+                if fetched is not None:
+                    data, _ctype = fetched
+                    st.image(data, use_container_width=True)
                 else:
                     img_path = _safe_path(rec.get("path"))
                     if img_path is not None and img_path.exists():
                         st.image(str(img_path), use_container_width=True)
                     else:
-                        st.caption(rec.get("path") or "")
+                        st.caption(
+                            "Could not load image from the API. "
+                            "If you deployed with `RETRIEVER_API_KEY`, set the same "
+                            "value in the UI env as `RETRIEVER_API_KEY` (or "
+                            "`ORCHESTRATOR_ASSET_BEARER_TOKEN`)."
+                        )
+                        if rec.get("path"):
+                            st.caption(str(rec.get("path")))
                 caption = rec.get("caption") or ""
                 short = caption[:260] + ("…" if len(caption) > 260 else "")
                 st.caption(short)
         return
 
-    single_asset_path = meta.get("asset_path")
-    if isinstance(single_asset_path, str) and single_asset_path.strip():
-        fetched = _fetch_asset_bytes(single_asset_path)
-        if fetched is not None:
-            data, ctype = fetched
-            st.image(data, use_container_width=True)
-        else:
-            st.caption("Failed to load image.")
+    candidates = _candidate_asset_paths_from_metadata(meta)
+    fetched = _fetch_first_working_asset(candidates)
+    if fetched is not None:
+        data, _ctype = fetched
+        st.image(data, use_container_width=True)
         if content:
             st.caption(content[:4000])
         details: list[str] = []
@@ -217,6 +291,9 @@ def _render_images_tab(content: str, meta: dict[str, Any]) -> None:
         if details:
             st.caption(" • ".join(details))
         return
+
+    if candidates:
+        st.caption("Failed to load image via /v1/assets/.")
 
     single_path = _safe_path(meta.get("path"))
     if single_path is not None:
@@ -225,21 +302,21 @@ def _render_images_tab(content: str, meta: dict[str, Any]) -> None:
         else:
             st.caption(str(single_path))
 
-        if content:
-            st.caption(content[:4000])
+    if content:
+        st.caption(content[:4000])
 
-        details: list[str] = []
-        if meta.get("caption_source"):
-            details.append(f"caption_source: {meta.get('caption_source')}")
-        if meta.get("xref"):
-            details.append(f"xref: {meta.get('xref')}")
-        if meta.get("image_index"):
-            details.append(f"image_index: {meta.get('image_index')}")
-        if details:
-            st.caption(" • ".join(details))
-        return
+    details: list[str] = []
+    if meta.get("caption_source"):
+        details.append(f"caption_source: {meta.get('caption_source')}")
+    if meta.get("xref"):
+        details.append(f"xref: {meta.get('xref')}")
+    if meta.get("image_index"):
+        details.append(f"image_index: {meta.get('image_index')}")
+    if details:
+        st.caption(" • ".join(details))
 
-    st.caption("No images for this source.")
+    if not candidates and single_path is None:
+        st.caption("No images for this source.")
 
 
 def render_source_card(i: int, source: dict[str, Any]) -> None:

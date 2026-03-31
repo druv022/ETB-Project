@@ -51,6 +51,8 @@ docker compose up --build
 
 - `http://localhost:8501`
 
+**Docker note (Sources / images):** The retriever stores extracted PDF images under `ETB_DOCUMENT_OUTPUT_DIR` (Compose sets this to `/app/data/document_output` on the shared `etb_data` volume). The Streamlit UI loads them via the orchestrator at `GET /v1/assets/...`. If you set `RETRIEVER_API_KEY` on the retriever, set the same value in the UI environment (e.g. in `.env` used by Compose) as `RETRIEVER_API_KEY` or `ORCHESTRATOR_ASSET_BEARER_TOKEN` so image requests are authorized.
+
 For other run modes (CLI, provider switching, health checks, etc.), see [`docs/APP_RUN_MODES.md`](docs/APP_RUN_MODES.md).
 
 ## Documentation

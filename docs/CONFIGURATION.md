@@ -90,6 +90,8 @@ This project uses environment variables for:
 
 - `ORCHESTRATOR_BASE_URL`
   - Base URL for the orchestrator (default: `http://localhost:8001`).
+- `RETRIEVER_API_KEY` or `ORCHESTRATOR_ASSET_BEARER_TOKEN`
+  - Optional. If the retriever requires a bearer token (`RETRIEVER_API_KEY` on the retriever service), the UI must send the same token when fetching images from `GET /v1/assets/...` (via the orchestrator proxy). Set one of these in the UI container environment to match the retriever.
 
 ### Orchestrator API (FastAPI)
 

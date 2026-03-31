@@ -116,3 +116,5 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-03-31**: `On clicking the radio button, the expanded source disaapears. Fix the issue and test if all feature of UI working. Use cursor browser in the conda etb env to test.` (Context: fix Streamlit rerun collapsing the Sources section by persisting its visibility state; run tests in the `ETB` conda env; UI smoke test via Cursor browser.)
 
 - **2026-03-31**: `The issue is not fixed rather worsen. The source disappears after pressing toggle. Test in the cursor browser and verify is that the best user experince ? Fix it accordingly.` (Context: revert toggle-based Sources visibility (bad UX) and restore a Sources expander that stays open during reruns caused by per-source radio interactions; verify in Cursor browser.)
+
+- **2026-03-31**: `Fix image rendering after Docker deploy` (Context: implement plan — `asset_path` relative to top-level `ETB_DOCUMENT_OUTPUT_DIR` when indexing multiple PDFs; Docker `ETB_DOCUMENT_OUTPUT_DIR`/`ETB_UPLOAD_DIR`; UI derives asset paths from stored absolute paths, forwards bearer token for `/v1/assets`, tests and docs.)

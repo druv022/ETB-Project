@@ -160,6 +160,7 @@ def process_pdf_to_vectorstores(
         output_dir=output_dir,
         chunking_config=chunking_config,
         image_captioner=image_captioner,
+        asset_path_root=Path(output_dir),
     )
     return build_two_vectorstores(text_docs, caption_docs)
 

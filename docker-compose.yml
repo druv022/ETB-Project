@@ -35,6 +35,9 @@ services:
     environment:
       - PYTHONPATH=/app/src
       - PYTHONUNBUFFERED=1
+      # Persist PDF extraction + images under the shared volume (see volumes.etb_data).
+      - ETB_DOCUMENT_OUTPUT_DIR=/app/data/document_output
+      - ETB_UPLOAD_DIR=/app/data/uploads
       # ollama-python Client reads OLLAMA_HOST; LangChain also accepts base_url from these.
       - OLLAMA_HOST=http://ollama:11434
       - OLLAMA_BASE_URL=http://ollama:11434
