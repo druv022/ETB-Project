@@ -54,22 +54,53 @@ This repo now includes a **standalone retriever HTTP API** (retrieve chunks + in
 docker compose up --build
 ```
 
-Compose starts **Ollama** (pulls the embedding model automatically), then the **retriever** once Ollama is healthy.
+Compose starts **Ollama** (pulls the embedding model automatically), then the **retriever** once Ollama is healthy. It also starts the **orchestrator** API and **Streamlit UI**.
 
 - **Check health**:
 
 ```bash
 curl http://localhost:8000/v1/health
 curl http://localhost:8000/v1/ready
+curl http://localhost:8001/v1/health
+curl http://localhost:8001/v1/ready
 ```
 
-- **Use the RAG orchestrator against the retriever**:
+- **Use the CLI RAG orchestrator against the retriever**:
 
 ```bash
 export ETB_RETRIEVER_MODE=remote
 export RETRIEVER_BASE_URL=http://localhost:8000
 python -m etb_project.main
 ```
+
+### Streamlit UI → Orchestrator API → Retriever API (Option A)
+
+The Streamlit app (`app.py`) calls the Orchestrator API (`/v1/chat`), which runs the LangGraph RAG pipeline and retrieves context via the Retriever API (`/v1/retrieve`).
+
+- **Open the UI**: `http://localhost:8501`
+
+#### Required environment variables (Orchestrator)
+
+Set these in `.env` (or your environment):
+
+- `ETB_LLM_PROVIDER` (default `openai_compat`): selects the chat provider (`openai_compat` or `ollama`)
+
+For `openai_compat` (recommended; works with OpenRouter):
+
+- `OPENAI_BASE_URL` (default `https://openrouter.ai/api/v1`)
+- `OPENAI_API_KEY` (set this, or set `OPENROUTER_API_KEY` and let compose map it)
+- `OPENAI_MODEL` (default `stepfun/step-3.5-flash`)
+- `OPENAI_TEMPERATURE` (default `0`)
+
+For `ollama`:
+
+- `OLLAMA_HOST` or `OLLAMA_BASE_URL` (e.g. `http://ollama:11434` inside compose)
+- `OLLAMA_CHAT_MODEL` (default `qwen3.5:9b`)
+- `OLLAMA_TEMPERATURE` (default `0`)
+
+The orchestrator talks to the retriever via docker network using `RETRIEVER_BASE_URL=http://retriever:8000` (already set in `docker-compose.yml`).
+
+Note: reporting utilities under `tools/` remain independently configured via `tools/data_generation/report_generation/llm_config.yaml` and `REPORT_LLM_*` environment variables.
 
 If you need to build/update the persisted indices first (PDF preprocessing, chunking, optional captioning), see the docs below.
 

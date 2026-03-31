@@ -56,6 +56,75 @@ services:
       ]
     restart: unless-stopped
 
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: etb_orchestrator
+    depends_on:
+      retriever:
+        condition: service_started
+    volumes:
+      - .:/app
+      - /app/.venv
+    environment:
+      - PYTHONPATH=/app/src
+      - PYTHONUNBUFFERED=1
+      # Orchestrator -> Retriever
+      - RETRIEVER_BASE_URL=http://retriever:8000
+      # LLM provider selection (see src/etb_project/models.py)
+      - ETB_LLM_PROVIDER=${ETB_LLM_PROVIDER:-openai_compat}
+      # OpenAI-compatible provider (use OpenRouter by setting OPENAI_BASE_URL)
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://openrouter.ai/api/v1}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-${OPENROUTER_API_KEY:-}}
+      - OPENAI_MODEL=${OPENAI_MODEL:-stepfun/step-3.5-flash}
+      - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0}
+      # Ollama provider (optional)
+      - OLLAMA_HOST=${OLLAMA_HOST:-}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
+      - OLLAMA_CHAT_MODEL=${OLLAMA_CHAT_MODEL:-qwen3.5:9b}
+      - OLLAMA_TEMPERATURE=${OLLAMA_TEMPERATURE:-0}
+      - ORCH_RETRIEVER_K=${ORCH_RETRIEVER_K:-10}
+      - ORCH_SESSION_TTL_SECONDS=${ORCH_SESSION_TTL_SECONDS:-7200}
+    env_file:
+      - .env
+    ports:
+      - "8001:8001"
+    command:
+      [
+        "python",
+        "-m",
+        "uvicorn",
+        "etb_project.orchestrator.app:create_app",
+        "--factory",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8001",
+      ]
+    restart: unless-stopped
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: etb_ui
+    depends_on:
+      orchestrator:
+        condition: service_started
+    volumes:
+      - .:/app
+      - /app/.venv
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ORCHESTRATOR_BASE_URL=http://orchestrator:8001
+    env_file:
+      - .env
+    ports:
+      - "8501:8501"
+    command: ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    restart: unless-stopped
+
 volumes:
   ollama_data:
   etb_data:

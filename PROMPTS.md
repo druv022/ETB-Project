@@ -96,3 +96,5 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-03-31 00:00:00 EDT**: `Implement the standalone retriever API plan (FastAPI + Docker), keep LangGraph RAG outside the retriever, add indexing/upload + retrieve endpoints, add error codes, tests, and documentation.` (Context: migrate integrated retrieval to a standalone API deployable via Docker Compose, plus a remote retriever client mode for the orchestrator.)
 
 - **2026-03-31 00:00:00 EDT**: `fix the error in the docker file itself instead of manual intervention.` (Context: docker-compose + Dockerfile: OLLAMA_HOST, auto-pull embedding model, healthcheck, models.py base_url from env.)
+
+- **2026-03-31**: `Implement Option A (Streamlit UI → Orchestrator API → Retriever API) with remote retriever, Docker multi-user setup, tests, and docs.` (Context: add `etb_project.orchestrator` FastAPI, wire Streamlit to `/v1/chat`, update docker-compose, add orchestrator tests, update README.)

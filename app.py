@@ -67,52 +67,35 @@ IMPORTANT RULES:
 def ensure_session_state() -> None:
     if "messages" not in st.session_state:
         st.session_state.messages: list[dict[str, str]] = []
+    if "session_id" not in st.session_state:
+        # Stable per-browser-session identifier; orchestrator uses it for memory.
+        st.session_state.session_id = os.urandom(16).hex()
 
 
-def call_indmex_agent(messages: list[dict[str, str]]) -> str:
-    """
-    Call a local Ollama-compatible endpoint exposed at
-    https://genai.rcac.purdue.edu/api using the llama4:latest model.
-    No authentication or API key is required.
-    """
-    url = "https://genai.rcac.purdue.edu/api/chat/completions"
-
-    token = os.getenv("PURDUE_API_KEY")
-    headers = {}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
+def call_orchestrator_chat(message: str) -> tuple[str, list[dict]]:
+    """Send a message to the Orchestrator API and return (answer, sources)."""
+    base_url = os.getenv("ORCHESTRATOR_BASE_URL", "http://localhost:8001").rstrip("/")
+    url = f"{base_url}/v1/chat"
     payload = {
-        "model": "llama4:latest",
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            *messages,
-        ],
-        "temperature": 0.2,
+        "session_id": st.session_state.session_id,
+        "message": message,
+        "return_sources": True,
     }
-
-    response = requests.post(url, json=payload, headers=headers, timeout=60)
-
     try:
+        response = requests.post(url, json=payload, timeout=120)
         response.raise_for_status()
-    except requests.HTTPError as exc:
-        if response.status_code == 401:
-            return (
-                "Orion could not access the local model API (401 Unauthorized).\n\n"
-                "The endpoint at https://genai.rcac.purdue.edu/api/chat/completions requires "
-                "a valid PURDUE_API_KEY. Please make sure it is set in your .env file or "
-                "environment as PURDUE_API_KEY."
-            )
+    except requests.RequestException as exc:
         return (
-            f"Orion received an HTTP error from the local model API "
-            f"({response.status_code}): {exc}"
+            "Orion could not reach the Orchestrator service. "
+            f"Please verify it is running and reachable at {base_url}. ({exc})",
+            [],
         )
-
-    data = response.json()
-
-    try:
-        return data["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError):
-        return "Orion could not parse a valid response from the local model API."
+    data = response.json() if response.content else {}
+    answer = str(data.get("answer") or "").strip()
+    sources = data.get("sources") or []
+    if not answer:
+        answer = "Orion did not receive a valid answer from the Orchestrator."
+    return answer, sources
 
 
 def main():
@@ -261,12 +244,20 @@ def main():
             st.markdown(user_input)
 
         with st.chat_message("assistant"):
-            with st.spinner("Orion is reviewing your request..."):
-                reply = call_indmex_agent(st.session_state.messages)
+            with st.spinner("Orion is retrieving an answer..."):
+                reply, sources = call_orchestrator_chat(user_input)
                 st.markdown(reply)
                 st.session_state.messages.append(
                     {"role": "assistant", "content": reply}
                 )
+                if sources:
+                    with st.expander("Sources", expanded=False):
+                        for i, s in enumerate(sources, 1):
+                            content = (s.get("content") or "").strip()
+                            meta = s.get("metadata") or {}
+                            st.markdown(f"**{i}.** {meta}")
+                            if content:
+                                st.markdown(content)
 
 
 if __name__ == "__main__":
