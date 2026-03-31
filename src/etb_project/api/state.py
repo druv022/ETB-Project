@@ -33,7 +33,13 @@ def _json_safe(value: Any) -> Any:
 def _serialize_metadata(meta: dict[str, Any] | None) -> dict[str, Any]:
     if not meta:
         return {}
-    return {str(k): _json_safe(v) for k, v in meta.items()}
+    out: dict[str, Any] = {}
+    for key, val in meta.items():
+        if isinstance(val, (str, int, float, bool)) or val is None:
+            out[str(key)] = val
+        else:
+            out[str(key)] = str(val)
+    return out
 
 
 class RetrieverServiceState:

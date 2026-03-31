@@ -36,12 +36,20 @@ pip install -e .
 ## Quickstart
 
 1) Create a `.env` with at least:
+1) Configure `src/config/settings.yaml` (or set `ETB_CONFIG` to an alternate YAML).
+
+2) Run the RAG app (local FAISS):
 
 ```bash
 OPENROUTER_API_KEY=...
 ```
 
 2) Start everything (UI + orchestrator + retriever + embeddings):
+### Standalone retriever API (recommended for Docker deployments)
+
+This repo now includes a **standalone retriever HTTP API** (retrieve chunks + index PDFs). The **LangGraph RAG** graph stays outside of the retriever.
+
+- **Start retriever + embeddings with Docker**:
 
 ```bash
 docker compose up --build
@@ -54,6 +62,24 @@ docker compose up --build
 **Docker note (Sources / images):** The retriever stores extracted PDF images under `ETB_DOCUMENT_OUTPUT_DIR` (Compose sets this to `/app/data/document_output` on the shared `etb_data` volume). The Streamlit UI loads them via the orchestrator at `GET /v1/assets/...`. If you set `RETRIEVER_API_KEY` on the retriever, set the same value in the UI environment (e.g. in `.env` used by Compose) as `RETRIEVER_API_KEY` or `ORCHESTRATOR_ASSET_BEARER_TOKEN` so image requests are authorized.
 
 For other run modes (CLI, provider switching, health checks, etc.), see [`docs/APP_RUN_MODES.md`](docs/APP_RUN_MODES.md).
+Compose starts **Ollama** (pulls the embedding model automatically), then the **retriever** once Ollama is healthy.
+
+- **Check health**:
+
+```bash
+curl http://localhost:8000/v1/health
+curl http://localhost:8000/v1/ready
+```
+
+- **Use the RAG orchestrator against the retriever**:
+
+```bash
+export ETB_RETRIEVER_MODE=remote
+export RETRIEVER_BASE_URL=http://localhost:8000
+python -m etb_project.main
+```
+
+If you need to build/update the persisted indices first (PDF preprocessing, chunking, optional captioning), see the docs below.
 
 ## Documentation
 
@@ -75,6 +101,43 @@ ETB-Project/
 ├── docker-compose.yml              # UI + orchestrator + retriever (+ Ollama) runtime
 ├── Dockerfile
 ├── Makefile
+etb_project/
+├── src/
+│   ├── config/                # settings.yaml (and optional config module)
+│   │   ├── config.py
+│   │   └── settings.yaml
+│   └── etb_project/           # Main package (installed with pip install .)
+│       ├── __init__.py
+│       ├── config.py          # AppConfig and load_config (reads settings.yaml / ETB_CONFIG)
+│       ├── main.py            # Entry point: load persisted indices, run single-query or interactive RAG loop
+│       ├── models.py          # LLM and embedding helpers
+│       ├── graph_rag.py       # LangGraph RAG graph (ingest_query → retrieve_rag → generate_answer)
+│       ├── api/               # Standalone retriever HTTP API (no RAG graph)
+│       └── retrieval/
+│           ├── __init__.py    # Re-exports retrieval helpers and DualRetriever adapter
+│           ├── loader.py     # load_pdf (PyPDFLoader)
+│           ├── process.py    # split_documents, store_documents (pre-stacked embeddings → FAISS), dual index builders
+│           └── dual_retriever.py # Single-query adapter that merges text/caption retrieval results
+├── tools/                     # Utilities and side projects (not installed)
+│   └── data_generation/
+├── tests/
+│   ├── test_config.py
+│   ├── test_main.py
+│   ├── test_models.py
+│   └── test_retrieval_process.py
+├── docs/
+│   ├── README.md
+│   ├── CONTRIBUTING.md
+│   ├── USAGE.md
+│   ├── CONFIGURATION.md
+│   ├── DOCUMENT_PROCESSING.md
+│   ├── CLI_REFERENCE.md
+│   ├── IMAGE_CAPTIONING.md
+│   ├── DEVELOPMENT.md
+│   ├── TOOLS.md
+│   └── ARCHITECTURE.md
+├── .github/workflows/
+├── pyproject.toml
 ├── requirements.txt
 ├── requirements-dev.txt
 ├── pyproject.toml

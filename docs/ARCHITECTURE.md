@@ -17,6 +17,24 @@ For operational “how-to” instructions, see the guides in [`docs/README.md`](
 ETB-Project/
 ├── app.py                      # Streamlit UI (calls orchestrator)
 ├── docker-compose.yml          # UI + orchestrator + retriever (+ Ollama)
+etb_project/
+├── src/
+│   ├── config/
+│   │   └── settings.yaml        # App config (pdf/query/retriever_k/log_level/vector_store_path + captioning models)
+│   └── etb_project/
+│       ├── __init__.py
+│       ├── config.py            # AppConfig, load_config (reads settings.yaml or ETB_CONFIG)
+│       ├── main.py              # Entry point: load persisted indices; single-query or interactive RAG loop
+│       ├── models.py            # LLM and embedding helpers
+│       ├── graph_rag.py         # LangGraph RAG graph (ingest_query → retrieve_rag → generate_answer)
+│       ├── api/                 # Standalone retriever HTTP API (no RAG graph)
+│       ├── document_processor_cli.py  # CLI for extraction/chunking/indexing/persistence
+│       ├── document_processing/ # PDF extraction, chunking, and optional image captioning
+│       ├── retrieval/           # Retrieval adapters and orchestration (including dual retrieval)
+│       └── vectorstore/         # Vector store backends + indexing service (persist/load)
+├── tools/                       # Utilities and side projects (not installed)
+│   └── data_generation/
+├── tests/                       # test_config, test_main, test_retrieval_process
 ├── docs/
 ├── data/                       # Persisted artifacts (uploads, outputs, vector indices)
 ├── tools/                      # Utilities and side projects (not installed)
@@ -85,6 +103,15 @@ flowchart LR
   Ret --> RAG
   RAG --> LLM["Chat LLM (OpenAI-compatible or Ollama)"]
   LLM --> Answer["Answer"]
+  Config[Config] --> Main[main]
+  Main --> Mode{retriever_mode}
+  Mode -->|local| LoadIndex[load_persisted_indices]
+  LoadIndex --> Retriever[DualRetriever]
+  Mode -->|remote| RetrieverAPI[Retriever_HTTP_API]
+  Main --> LangGraphRAG["LangGraph RAG graph"]
+  Retriever --> LangGraphRAG
+  RetrieverAPI --> LangGraphRAG
+  LangGraphRAG --> LLMAnswer["LLM answer"]
 ```
 
 - **Config** (`etb_project.config`): `AppConfig` holds runtime keys like `pdf`, `query`, `retriever_k`, `log_level`, and paths like `vector_store_path`.
@@ -92,6 +119,18 @@ flowchart LR
 - **Remote retriever client** (`etb_project.retrieval.remote_retriever.RemoteRetriever`): orchestrator/CLI client for `POST /v1/retrieve`.
 - **LangGraph RAG graph** (`etb_project.graph_rag`): orchestrates `ingest_query → retrieve_rag → generate_answer`.
 - **UI** (`app.py`): sends chat messages to the orchestrator; renders answers and optional sources.
+
+### Standalone retriever API (optional)
+
+The retriever API exposes:
+
+- `POST /v1/retrieve`: returns retrieved chunks (content + metadata)
+- `POST /v1/index/documents`: upload PDFs and update the persisted dual index
+
+The RAG layer remains outside of this service. The orchestrator can switch to remote mode using:
+
+- `ETB_RETRIEVER_MODE=remote`
+- `RETRIEVER_BASE_URL=http://<host>:8000`
 
 ### Standalone retriever API (optional)
 

@@ -51,6 +51,7 @@ Notes:
 - `k` is optional; when omitted it defaults to `retriever_k` from `settings.yaml`.
 - `k` is bounded by configuration (`ETB_MAX_RETRIEVE_K`, max 100).
 - Requests may be rate limited (429) based on `ETB_RATE_LIMIT_PER_MINUTE`.
+- `k` is bounded by configuration (`ETB_MAX_RETRIEVE_K` and `retriever_k` defaults).
 
 #### `POST /v1/index/documents`
 
@@ -58,6 +59,7 @@ Multipart form upload of one or more `.pdf` files. Query params:
 
 - `reset=true|false`: when true, deletes the existing persisted VDB and rebuilds.
 - `async_mode=true|false` (optional): override server default for async job mode (default comes from `ETB_INDEX_ASYNC`).
+- `async_mode=true|false` (optional): override server default for async job mode.
 
 Async mode returns `202` with a `job_id`. Poll:
 
