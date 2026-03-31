@@ -48,14 +48,16 @@ Response body:
 
 Notes:
 
-- `k` is bounded by configuration (`ETB_MAX_RETRIEVE_K` and `retriever_k` defaults).
+- `k` is optional; when omitted it defaults to `retriever_k` from `settings.yaml`.
+- `k` is bounded by configuration (`ETB_MAX_RETRIEVE_K`, max 100).
+- Requests may be rate limited (429) based on `ETB_RATE_LIMIT_PER_MINUTE`.
 
 #### `POST /v1/index/documents`
 
 Multipart form upload of one or more `.pdf` files. Query params:
 
 - `reset=true|false`: when true, deletes the existing persisted VDB and rebuilds.
-- `async_mode=true|false` (optional): override server default for async job mode.
+- `async_mode=true|false` (optional): override server default for async job mode (default comes from `ETB_INDEX_ASYNC`).
 
 Async mode returns `202` with a `job_id`. Poll:
 
@@ -66,6 +68,13 @@ Async mode returns `202` with a `job_id`. Poll:
 If `RETRIEVER_API_KEY` is set on the service, requests must include:
 
 - `Authorization: Bearer <RETRIEVER_API_KEY>`
+
+### Indexing behavior (important)
+
+- The API **writes uploaded PDFs** to `ETB_UPLOAD_DIR` (default `data/uploads/`).
+- It writes extracted artifacts to `ETB_DOCUMENT_OUTPUT_DIR` (default `data/document_output/`).
+- Chunking uses `ETB_CHUNK_SIZE` (default 1000) and `ETB_CHUNK_OVERLAP` (default 200).
+- Vector store persistence location comes from `vector_store_path` in `src/config/settings.yaml` (or `ETB_CONFIG` override).
 
 ### Error codes
 
@@ -82,6 +91,10 @@ Common codes:
 - `OLLAMA_UNAVAILABLE` (503): embeddings backend failed/unreachable
 - `RATE_LIMITED` (429): request rate exceeded
 - `UNAUTHORIZED` (401): missing/invalid bearer token
+- `PAYLOAD_TOO_LARGE` (413): request body exceeded `ETB_MAX_RETRIEVE_BODY_BYTES`
+- `FILE_TOO_LARGE` (413): uploaded PDF exceeds `ETB_MAX_UPLOAD_BYTES`
+- `TOO_MANY_FILES` (400): too many PDFs in one request (see `ETB_MAX_UPLOAD_FILES`)
+- `UNSUPPORTED_MEDIA_TYPE` (415): only PDFs are accepted
 
 ### Orchestrator (RAG) usage
 

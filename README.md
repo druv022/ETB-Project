@@ -6,7 +6,7 @@ An enterprise chatbot-style RAG project for querying PDF content using persisted
 
 - Dual retrieval (text chunks + image captions), merged for RAG
 - Persisted vector indices (build once, load for runtime querying)
-- Optional pluggable image captioning backends (OpenRouter/OpenAI/mock)
+- Optional pluggable image captioning backends (OpenRouter/OpenAI)
 - Modern Python tooling: Ruff, Black, MyPy, pytest, pre-commit, Docker
 
 ## Requirements
@@ -35,79 +35,28 @@ pip install -e .
 
 ## Quickstart
 
-1) Configure `src/config/settings.yaml` (or set `ETB_CONFIG` to an alternate YAML).
-
-2) Run the RAG app (local FAISS):
+1) Create a `.env` with at least:
 
 ```bash
-python -m etb_project.main
-make run
+OPENROUTER_API_KEY=...
 ```
 
-### Standalone retriever API (recommended for Docker deployments)
-
-This repo now includes a **standalone retriever HTTP API** (retrieve chunks + index PDFs). The **LangGraph RAG** graph stays outside of the retriever.
-
-- **Start retriever + embeddings with Docker**:
+2) Start everything (UI + orchestrator + retriever + embeddings):
 
 ```bash
 docker compose up --build
 ```
 
-Compose starts **Ollama** (pulls the embedding model automatically), then the **retriever** once Ollama is healthy. It also starts the **orchestrator** API and **Streamlit UI**.
+3) Open the UI:
 
-- **Check health**:
+- `http://localhost:8501`
 
-```bash
-curl http://localhost:8000/v1/health
-curl http://localhost:8000/v1/ready
-curl http://localhost:8001/v1/health
-curl http://localhost:8001/v1/ready
-```
-
-- **Use the CLI RAG orchestrator against the retriever**:
-
-```bash
-export ETB_RETRIEVER_MODE=remote
-export RETRIEVER_BASE_URL=http://localhost:8000
-python -m etb_project.main
-```
-
-### Streamlit UI → Orchestrator API → Retriever API (Option A)
-
-The Streamlit app (`app.py`) calls the Orchestrator API (`/v1/chat`), which runs the LangGraph RAG pipeline and retrieves context via the Retriever API (`/v1/retrieve`).
-
-- **Open the UI**: `http://localhost:8501`
-
-#### Required environment variables (Orchestrator)
-
-Set these in `.env` (or your environment):
-
-- `ETB_LLM_PROVIDER` (default `openai_compat`): selects the chat provider (`openai_compat` or `ollama`)
-
-For `openai_compat` (recommended; works with OpenRouter):
-
-- `OPENAI_BASE_URL` (default `https://openrouter.ai/api/v1`)
-- `OPENAI_API_KEY` (set this, or set `OPENROUTER_API_KEY` and let compose map it)
-- `OPENAI_MODEL` (default `stepfun/step-3.5-flash`)
-- `OPENAI_TEMPERATURE` (default `0`)
-
-For `ollama`:
-
-- `OLLAMA_HOST` or `OLLAMA_BASE_URL` (e.g. `http://ollama:11434` inside compose)
-- `OLLAMA_CHAT_MODEL` (default `qwen3.5:9b`)
-- `OLLAMA_TEMPERATURE` (default `0`)
-
-The orchestrator talks to the retriever via docker network using `RETRIEVER_BASE_URL=http://retriever:8000` (already set in `docker-compose.yml`).
-
-Note: reporting utilities under `tools/` remain independently configured via `tools/data_generation/report_generation/llm_config.yaml` and `REPORT_LLM_*` environment variables.
-
-If you need to build/update the persisted indices first (PDF preprocessing, chunking, optional captioning), see the docs below.
+For other run modes (CLI, provider switching, health checks, etc.), see [`docs/APP_RUN_MODES.md`](docs/APP_RUN_MODES.md).
 
 ## Documentation
 
 - **Start here**: [`docs/README.md`](docs/README.md)
-- **Run the RAG app**: [`docs/USAGE.md`](docs/USAGE.md)
+- **Run modes (updated)**: [`docs/APP_RUN_MODES.md`](docs/APP_RUN_MODES.md)
 - **Configure the project**: [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)
 - **Preprocess PDFs + build/update indices**: [`docs/DOCUMENT_PROCESSING.md`](docs/DOCUMENT_PROCESSING.md)
 - **Document processor CLI flags**: [`docs/CLI_REFERENCE.md`](docs/CLI_REFERENCE.md)
@@ -119,49 +68,35 @@ If you need to build/update the persisted indices first (PDF preprocessing, chun
 ## Project Structure
 
 ```
-etb_project/
-├── src/
-│   ├── config/                # settings.yaml (and optional config module)
-│   │   ├── config.py
-│   │   └── settings.yaml
-│   └── etb_project/           # Main package (installed with pip install .)
-│       ├── __init__.py
-│       ├── config.py          # AppConfig and load_config (reads settings.yaml / ETB_CONFIG)
-│       ├── main.py            # Entry point: load persisted indices, run single-query or interactive RAG loop
-│       ├── models.py          # LLM and embedding helpers
-│       ├── graph_rag.py       # LangGraph RAG graph (ingest_query → retrieve_rag → generate_answer)
-│       ├── api/               # Standalone retriever HTTP API (no RAG graph)
-│       └── retrieval/
-│           ├── __init__.py    # Re-exports retrieval helpers and DualRetriever adapter
-│           ├── loader.py     # load_pdf (PyPDFLoader)
-│           ├── process.py    # split_documents, store_documents (pre-stacked embeddings → FAISS), dual index builders
-│           └── dual_retriever.py # Single-query adapter that merges text/caption retrieval results
-├── tools/                     # Utilities and side projects (not installed)
-│   └── data_generation/
-├── tests/
-│   ├── test_config.py
-│   ├── test_main.py
-│   ├── test_models.py
-│   └── test_retrieval_process.py
-├── docs/
-│   ├── README.md
-│   ├── CONTRIBUTING.md
-│   ├── USAGE.md
-│   ├── CONFIGURATION.md
-│   ├── DOCUMENT_PROCESSING.md
-│   ├── CLI_REFERENCE.md
-│   ├── IMAGE_CAPTIONING.md
-│   ├── DEVELOPMENT.md
-│   ├── TOOLS.md
-│   └── ARCHITECTURE.md
-├── .github/workflows/
-├── pyproject.toml
+ETB-Project/
+├── app.py                          # Streamlit UI entrypoint
+├── docker-compose.yml              # UI + orchestrator + retriever (+ Ollama) runtime
+├── Dockerfile
+├── Makefile
 ├── requirements.txt
 ├── requirements-dev.txt
-├── Dockerfile
-├── docker-compose.yml
-├── Makefile
-└── README.md
+├── pyproject.toml
+├── docs/                           # Project docs (start with docs/README.md)
+├── docker/                         # Container scripts/healthchecks
+├── data/                           # Persisted artifacts (uploads, outputs, vector indices)
+├── tools/                          # Utilities / side projects (not installed as package)
+├── tests/                          # pytest suite
+└── src/
+    ├── config/
+    │   └── settings.yaml           # Primary config file (see docs/CONFIGURATION.md)
+    └── etb_project/                # Main package (installed with `pip install -e .`)
+        ├── __init__.py
+        ├── config.py
+        ├── main.py
+        ├── models.py
+        ├── graph_rag.py
+        ├── studio_entry.py
+        ├── document_processor_cli.py
+        ├── document_processing/
+        ├── retrieval/              # Retrieval orchestration + local/remote retrievers
+        ├── vectorstore/            # FAISS persistence/indexing services
+        ├── api/                    # Retriever FastAPI service
+        └── orchestrator/           # Orchestrator FastAPI service (UI talks to this)
 ```
 
 ## Contributing

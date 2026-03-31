@@ -14,26 +14,26 @@ For operational “how-to” instructions, see the guides in [`docs/README.md`](
 ## Project Structure
 
 ```
-etb_project/
-├── src/
-│   ├── config/
-│   │   └── settings.yaml        # App config (pdf/query/retriever_k/log_level/vector_store_path + captioning models)
-│   └── etb_project/
-│       ├── __init__.py
-│       ├── config.py            # AppConfig, load_config (reads settings.yaml or ETB_CONFIG)
-│       ├── main.py              # Entry point: load persisted indices; single-query or interactive RAG loop
-│       ├── models.py            # LLM and embedding helpers
-│       ├── graph_rag.py         # LangGraph RAG graph (ingest_query → retrieve_rag → generate_answer)
-│       ├── api/                 # Standalone retriever HTTP API (no RAG graph)
-│       ├── document_processor_cli.py  # CLI for extraction/chunking/indexing/persistence
-│       ├── document_processing/ # PDF extraction, chunking, and optional image captioning
-│       ├── retrieval/           # Retrieval adapters and orchestration (including dual retrieval)
-│       └── vectorstore/         # Vector store backends + indexing service (persist/load)
-├── tools/                       # Utilities and side projects (not installed)
-│   └── data_generation/
-├── tests/                       # test_config, test_main, test_retrieval_process
+ETB-Project/
+├── app.py                      # Streamlit UI (calls orchestrator)
+├── docker-compose.yml          # UI + orchestrator + retriever (+ Ollama)
 ├── docs/
-└── .github/
+├── data/                       # Persisted artifacts (uploads, outputs, vector indices)
+├── tools/                      # Utilities and side projects (not installed)
+├── tests/
+└── src/
+    ├── config/
+    │   └── settings.yaml
+    └── etb_project/
+        ├── api/                # Retriever API (indexing + retrieve; no RAG graph)
+        ├── orchestrator/       # Orchestrator API (chat; runs LangGraph RAG)
+        ├── retrieval/          # Dual/local + remote retriever client
+        ├── vectorstore/        # FAISS persistence/indexing backends
+        ├── document_processing/
+        ├── document_processor_cli.py
+        ├── graph_rag.py
+        ├── main.py             # CLI RAG (local or remote retriever)
+        └── models.py           # Chat LLM provider selection + Ollama embeddings wrapper
 ```
 
 ### Tools and utilities
@@ -70,28 +70,28 @@ The main application entry point is in `src/etb_project/main.py`. This module:
 
 - Loads configuration from `src/config/settings.yaml` (or `ETB_CONFIG` path)
 - Sets log level from config
-- Loads persisted vector indices from `vector_store_path`
+- Uses **local** or **remote** retrieval (via `ETB_RETRIEVER_MODE`)
 - Runs a single query if `config.query` is set, otherwise enters an interactive query loop
 
 ### RAG pipeline
 
 ```mermaid
 flowchart LR
-  Config[Config] --> Main[main]
-  Main --> Mode{retriever_mode}
-  Mode -->|local| LoadIndex[load_persisted_indices]
-  LoadIndex --> Retriever[DualRetriever]
-  Mode -->|remote| RetrieverAPI[Retriever_HTTP_API]
-  Main --> LangGraphRAG["LangGraph RAG graph"]
-  Retriever --> LangGraphRAG
-  RetrieverAPI --> LangGraphRAG
-  LangGraphRAG --> LLMAnswer["LLM answer"]
+  UI[Streamlit UI] -->|POST /v1/chat| Orch[Orchestrator API]
+  Orch -->|POST /v1/retrieve| Ret[Retriever API]
+  Ret -->|embeddings| Ollama[Ollama]
+
+  Orch --> RAG["LangGraph RAG graph"]
+  Ret --> RAG
+  RAG --> LLM["Chat LLM (OpenAI-compatible or Ollama)"]
+  LLM --> Answer["Answer"]
 ```
 
 - **Config** (`etb_project.config`): `AppConfig` holds runtime keys like `pdf`, `query`, `retriever_k`, `log_level`, and paths like `vector_store_path`.
-- **Index load** (`etb_project.vectorstore`): loads the persisted vector indices that were built during document processing.
-- **Retriever** (`etb_project.retrieval.dual_retriever.DualRetriever`): merges/de-duplicates results from the text index and caption index.
+- **Retriever API** (`etb_project.api`): indexing + retrieval endpoints; persists vector indices and serves retrieval.
+- **Remote retriever client** (`etb_project.retrieval.remote_retriever.RemoteRetriever`): orchestrator/CLI client for `POST /v1/retrieve`.
 - **LangGraph RAG graph** (`etb_project.graph_rag`): orchestrates `ingest_query → retrieve_rag → generate_answer`.
+- **UI** (`app.py`): sends chat messages to the orchestrator; renders answers and optional sources.
 
 ### Standalone retriever API (optional)
 

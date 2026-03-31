@@ -75,10 +75,78 @@ openai_image_caption_model: "gpt-4.1-mini"
 
 ## Environment variables
 
+This project uses environment variables for:
+
+- **Service wiring** (UI → Orchestrator → Retriever)
+- **Secrets** (API keys)
+- **Operational limits** (rate limiting, upload limits, async indexing)
+
 ### Config selection
 
 - `ETB_CONFIG`
   - Absolute path to a YAML file to use instead of `src/config/settings.yaml`.
+
+### UI (Streamlit)
+
+- `ORCHESTRATOR_BASE_URL`
+  - Base URL for the orchestrator (default: `http://localhost:8001`).
+
+### Orchestrator API (FastAPI)
+
+- `RETRIEVER_BASE_URL`
+  - Base URL for the retriever API (required for orchestrator; in Compose it’s `http://retriever:8000`).
+- `ORCH_RETRIEVER_K`
+  - Default `k` used by `POST /v1/chat` when the request body doesn’t specify `k`.
+- `ORCH_SESSION_TTL_SECONDS`
+  - Session TTL for in-memory chat history.
+- `ORCH_CORS_ALLOW_ORIGINS`
+  - Optional comma-separated origins for CORS (e.g. `http://localhost:8501`).
+
+LLM provider selection:
+
+- `ETB_LLM_PROVIDER`
+  - `openai_compat` (default) or `ollama`.
+
+OpenAI-compatible chat backend (also used for OpenRouter):
+
+- `OPENAI_BASE_URL`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `OPENAI_TEMPERATURE`
+
+Ollama chat backend:
+
+- `OLLAMA_HOST` (or `OLLAMA_BASE_URL`)
+- `OLLAMA_CHAT_MODEL`
+- `OLLAMA_TEMPERATURE`
+
+### Retriever API (FastAPI)
+
+Wiring / auth:
+
+- `RETRIEVER_API_KEY`
+  - If set, clients must send `Authorization: Bearer <token>`.
+
+Artifact directories:
+
+- `ETB_DOCUMENT_OUTPUT_DIR` (default: `data/document_output`)
+- `ETB_UPLOAD_DIR` (default: `data/uploads`)
+
+Indexing behavior:
+
+- `ETB_CHUNK_SIZE` (default: 1000)
+- `ETB_CHUNK_OVERLAP` (default: 200)
+- `ETB_INDEX_ASYNC`
+  - When true (default), `POST /v1/index/documents` runs in background and returns a `job_id` unless `async_mode=false`.
+
+Limits:
+
+- `ETB_MAX_RETRIEVE_K` (default: 100; max 100)
+- `ETB_MAX_QUERY_CHARS` (default: 10000)
+- `ETB_MAX_UPLOAD_BYTES` (default: 50MB per PDF)
+- `ETB_MAX_UPLOAD_FILES` (default: 20 files per request)
+- `ETB_MAX_RETRIEVE_BODY_BYTES` (default: 65536)
+- `ETB_RATE_LIMIT_PER_MINUTE` (default: 120)
 
 ### Captioning secrets
 

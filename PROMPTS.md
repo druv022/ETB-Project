@@ -98,3 +98,11 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-03-31 00:00:00 EDT**: `fix the error in the docker file itself instead of manual intervention.` (Context: docker-compose + Dockerfile: OLLAMA_HOST, auto-pull embedding model, healthcheck, models.py base_url from env.)
 
 - **2026-03-31**: `Implement Option A (Streamlit UI → Orchestrator API → Retriever API) with remote retriever, Docker multi-user setup, tests, and docs.` (Context: add `etb_project.orchestrator` FastAPI, wire Streamlit to `/v1/chat`, update docker-compose, add orchestrator tests, update README.)
+
+- **2026-03-31**: `Include the minimal path for user to run the tool in the readme.md and update/add to docs describing the updated approach of running the app.` (Context: add a minimal Docker run section to README and create/update docs describing UI + orchestrator + retriever run modes.)
+
+- **2026-03-31**: `The readme.md has two section, minimal run and quickstart. Only keep quickstart with the minimal steps. And refer to the details docs` (Context: remove separate minimal-run section and make Quickstart the single minimal run path; link to detailed docs.)
+
+- **2026-03-31**: `Update the REARME.md in the parent folder with the correct latest project structure.` (Context: update root `README.md` project structure tree to match current repo layout: orchestrator + retriever APIs, data/ artifacts, and src package layout.)
+
+- **2026-03-31**: `Now update the /docs section with the currect implementation and complete details` (Context: align docs with the current UI → Orchestrator API → Retriever API implementation, endpoints, run modes, and configuration.)
