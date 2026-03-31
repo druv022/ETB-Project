@@ -65,11 +65,24 @@ Response body:
   "sources": [
     { "content": "string", "metadata": { "source": "file.pdf", "page": 1 } }
   ],
-  "request_id": "string"
+  "request_id": "string",
+  "phase": "clarify"
 }
 ```
 
+(`phase` is `"answer"` after a normal retrieve-and-answer turn.)
+
+- **`phase`**: `"clarify"` when Orion returned a clarification only (no retrieval); `"answer"` when retrieval and grounded answering ran. Omitted or `null` in older clients; always set by the current server.
+
+When Orion clarification is active (`ETB_ORION_CLARIFY=1`, default), a **clarify** turn returns **`sources: []`** because the retriever was not called.
+
 ### Configuration (environment variables)
+
+**Orion (pre-retrieval clarification)**:
+
+- `ETB_ORION_CLARIFY`
+  - `1` (default): run the Orion `orion_gate` node before retrieval in the orchestrator LangGraph.
+  - `0`, `false`, `no`, or `off`: skip Orion and go straight to retrieve + answer (same as the CLI default for `build_rag_graph(..., enable_orion_gate=False)`).
 
 Service wiring:
 

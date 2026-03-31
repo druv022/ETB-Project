@@ -50,10 +50,12 @@ pip install -r requirements-dev.txt
 pip install -e .
 ```
 
-Run tests without manually activating:
+Run tests without manually activating (use your env name: **`ETB`**, **`etb`**, or whatever you created):
 
 ```bash
 conda run -n ETB pytest
+# or
+conda run -n etb pytest
 ```
 
 ## Quickstart
@@ -66,7 +68,7 @@ conda run -n ETB pytest
 docker compose up --build
 ```
 
-The repo ships a **standalone retriever HTTP API** (retrieve + index PDFs). The **LangGraph RAG** graph runs in the **orchestrator**, not in the retriever.
+The repo ships a **standalone retriever HTTP API** (retrieve + index PDFs). The **LangGraph RAG** graph runs in the **orchestrator**, not in the retriever. The orchestrator can run an **Orion** clarification step before retrieval (`ETB_ORION_CLARIFY`, default on); see [`docs/ORCHESTRATOR_API.md`](docs/ORCHESTRATOR_API.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 3. Open the UI:
 

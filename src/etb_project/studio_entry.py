@@ -26,4 +26,4 @@ def rag_app() -> object:
     retriever = vectorstore.as_retriever(search_kwargs={"k": config.retriever_k})
 
     llm = get_llm()
-    return build_rag_graph(llm=llm, retriever=retriever)
+    return build_rag_graph(llm=llm, retriever=retriever, enable_orion_gate=False)

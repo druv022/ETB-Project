@@ -13,7 +13,7 @@ import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 from fastapi import Depends, FastAPI, Request, Response
@@ -32,6 +32,10 @@ from etb_project.orchestrator.schemas import (
     HealthResponse,
     ReadyResponse,
     SourceOut,
+)
+from etb_project.orchestrator.session_messages import (
+    deserialize_messages,
+    serialize_messages,
 )
 from etb_project.orchestrator.sessions import InMemorySessionStore
 from etb_project.orchestrator.settings import (
@@ -251,8 +255,7 @@ def create_app() -> FastAPI:
         llm = get_chat_llm()
         graph = build_rag_graph(llm=llm, retriever=retriever)
 
-        # Phase 1: minimal per-turn invocation; keep messages for future multi-turn upgrades.
-        prior = sessions.get_messages(body.session_id)
+        prior = deserialize_messages(sessions.get_messages(body.session_id))
         result: dict[str, Any] = graph.invoke(
             {"query": body.message, "messages": prior}
         )
@@ -264,10 +267,9 @@ def create_app() -> FastAPI:
                 "LLM returned an empty answer.",
             )
 
-        # Persist messages back if present.
         messages = result.get("messages")
         if isinstance(messages, list):
-            sessions.set_messages(body.session_id, messages)
+            sessions.set_messages(body.session_id, serialize_messages(messages))
 
         sources: list[SourceOut] = []
         if body.return_sources:
@@ -283,6 +285,9 @@ def create_app() -> FastAPI:
                 except Exception:
                     continue
 
-        return ChatResponse(answer=answer, sources=sources, request_id=rid)
+        rt = result.get("route")
+        phase: Literal["clarify", "answer"] = "clarify" if rt == "clarify" else "answer"
+
+        return ChatResponse(answer=answer, sources=sources, request_id=rid, phase=phase)
 
     return app

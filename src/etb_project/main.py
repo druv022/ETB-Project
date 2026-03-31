@@ -140,7 +140,9 @@ def main() -> None:
     # Interactive query loop using LangGraph
     logger.info("Enter a query (empty line to exit).")
     agent_llm = get_llm()
-    rag_graph = build_rag_graph(llm=agent_llm, retriever=retriever)
+    rag_graph = build_rag_graph(
+        llm=agent_llm, retriever=retriever, enable_orion_gate=False
+    )
 
     while True:
         try:

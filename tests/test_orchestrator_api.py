@@ -63,8 +63,38 @@ def test_chat_happy_path_returns_answer_and_sources(client: TestClient) -> None:
     assert r.status_code == 200
     data = r.json()
     assert data["answer"] == "hello"
+    assert data.get("phase") == "answer"
     assert len(data["sources"]) == 1
     assert data["sources"][0]["metadata"]["source"] == "x.pdf"
+
+
+def test_chat_clarify_phase_empty_sources(client: TestClient) -> None:
+    """Clarification-only response exposes phase clarify and no sources."""
+
+    def fake_build_graph(*args: object, **kwargs: object) -> object:
+        class G:
+            def invoke(self, _state: dict) -> dict:
+                return {
+                    "answer": "Which quarter?",
+                    "context_docs": [],
+                    "messages": [],
+                    "route": "clarify",
+                }
+
+        return G()
+
+    with patch(
+        "etb_project.orchestrator.app.build_rag_graph", side_effect=fake_build_graph
+    ):
+        r = client.post(
+            "/v1/chat",
+            json={"session_id": "s1", "message": "sales?", "return_sources": True},
+        )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["answer"] == "Which quarter?"
+    assert data.get("phase") == "clarify"
+    assert data["sources"] == []
 
 
 def test_chat_returns_502_on_empty_answer(client: TestClient) -> None:

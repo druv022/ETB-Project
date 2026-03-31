@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -27,6 +27,7 @@ class ChatResponse(BaseModel):
     answer: str
     sources: list[SourceOut] = Field(default_factory=list)
     request_id: str | None = None
+    phase: Literal["clarify", "answer"] | None = None
 
 
 class HealthResponse(BaseModel):
