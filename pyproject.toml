@@ -143,6 +143,14 @@ module = "etb_project.retrieval.process"
 ignore_missing_imports = true
 warn_unused_ignores = false
 
+[[tool.mypy.overrides]]
+module = "etb_project.api.app"
+disallow_untyped_decorators = false
+
+[[tool.mypy.overrides]]
+module = "etb_project.orchestrator.app"
+disallow_untyped_decorators = false
+
 [tool.pytest.ini_options]
 minversion = "7.0"
 testpaths = ["tests"]

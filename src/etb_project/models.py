@@ -61,7 +61,8 @@ class FaissCompatibleEmbeddings(Embeddings):
         return _normalize_embed_documents_for_faiss(raw, len(texts))
 
     def embed_query(self, text: str) -> list[float]:
-        return self._inner.embed_query(text)
+        raw = self._inner.embed_query(text)
+        return [float(x) for x in raw]
 
 
 def get_openai_llm(model: str = "gpt-4o-mini", temperature: float = 0) -> ChatOpenAI:

@@ -125,9 +125,9 @@ def _error_response(
 def _client_ip(request: Request) -> str:
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
-        return forwarded.split(",")[0].strip()
+        return str(forwarded).split(",")[0].strip()
     if request.client:
-        return request.client.host
+        return str(request.client.host)
     return "unknown"
 
 

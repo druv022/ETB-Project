@@ -215,11 +215,11 @@ def main() -> None:
 
     logger.info(
         "Text FAISS store built with %d documents",
-        len(text_vectorstore.docstore._dict),  # type: ignore[attr-defined]  # noqa: SLF001
+        len(getattr(text_vectorstore.docstore, "_dict", {})),  # noqa: SLF001
     )
     logger.info(
         "Caption FAISS store built with %d documents",
-        len(caption_vectorstore.docstore._dict),  # type: ignore[attr-defined]  # noqa: SLF001
+        len(getattr(caption_vectorstore.docstore, "_dict", {})),  # noqa: SLF001
     )
 
 
