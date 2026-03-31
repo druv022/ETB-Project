@@ -1,21 +1,61 @@
-version: '3.8'
-
 services:
-  app:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: etb_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+      - ./docker/ollama-entrypoint.sh:/entrypoint.sh:ro
+      - ./docker/ollama-healthcheck.sh:/healthcheck.sh:ro
+    # ollama-python uses OLLAMA_HOST (not OLLAMA_BASE_URL); retriever must reach this hostname.
+    environment:
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-qwen3-embedding:0.6b}
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "/bin/sh /healthcheck.sh"]
+      interval: 10s
+      timeout: 15s
+      retries: 60
+      start_period: 300s
+    restart: unless-stopped
+
+  retriever:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: etb_project
+    container_name: etb_retriever
+    depends_on:
+      ollama:
+        condition: service_healthy
     volumes:
+      - etb_data:/app/data
       - .:/app
       - /app/.venv
     environment:
-      - PYTHONPATH=/app
+      - PYTHONPATH=/app/src
       - PYTHONUNBUFFERED=1
+      # ollama-python Client reads OLLAMA_HOST; LangChain also accepts base_url from these.
+      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_BASE_URL=http://ollama:11434
     env_file:
       - .env
     ports:
       - "8000:8000"
-    command: python -m etb_project.main
-
+    command:
+      [
+        "python",
+        "-m",
+        "uvicorn",
+        "etb_project.api.app:create_app",
+        "--factory",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+      ]
     restart: unless-stopped
+
+volumes:
+  ollama_data:
+  etb_data:

@@ -1,3 +1,4 @@
+import os
 from typing import Any, cast
 
 import numpy as np
@@ -64,13 +65,29 @@ def get_openai_llm(model: str = "gpt-4o-mini", temperature: float = 0) -> ChatOp
     return llm
 
 
+def _ollama_base_url() -> str | None:
+    """Host URL for Ollama HTTP API (ollama-python uses ``OLLAMA_HOST``; we also honor ``OLLAMA_BASE_URL``)."""
+    raw = os.environ.get("OLLAMA_HOST") or os.environ.get("OLLAMA_BASE_URL")
+    if raw is None or str(raw).strip() == "":
+        return None
+    return str(raw).strip()
+
+
 def get_ollama_llm(model: str = "qwen3.5:9b", temperature: float = 0) -> ChatOllama:
-    llm = ChatOllama(model=model, temperature=temperature)
-    return llm
+    bu = _ollama_base_url()
+    if bu:
+        return ChatOllama(model=model, temperature=temperature, base_url=bu)
+    return ChatOllama(model=model, temperature=temperature)
 
 
 def get_ollama_embedding_model(model: str = "qwen3-embedding:0.6b") -> Embeddings:
-    return FaissCompatibleEmbeddings(OllamaEmbeddings(model=model))
+    bu = _ollama_base_url()
+    inner = (
+        OllamaEmbeddings(model=model, base_url=bu)
+        if bu
+        else OllamaEmbeddings(model=model)
+    )
+    return FaissCompatibleEmbeddings(inner)
 
 
 if __name__ == "__main__":

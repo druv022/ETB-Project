@@ -2,7 +2,12 @@
 
 ## Overview
 
-ETB-project separates **index building** (document processing + persisted vector stores) from **runtime querying** (load persisted indices and run RAG). This keeps the main application fast and repeatable: you rebuild/update indices only when the underlying documents change.
+ETB-project separates **index building** (document processing + persisted vector stores) from **runtime querying** (RAG orchestration). Runtime querying can run either:
+
+- **Local mode**: load persisted indices and retrieve in-process (developer workflow)
+- **Remote mode**: call a **standalone retriever HTTP API** for retrieval and indexing (deployment workflow)
+
+This keeps the RAG layer flexible while the retriever can be deployed/scaled as a separate unit.
 
 For operational “how-to” instructions, see the guides in [`docs/README.md`](README.md).
 
@@ -19,6 +24,7 @@ etb_project/
 │       ├── main.py              # Entry point: load persisted indices; single-query or interactive RAG loop
 │       ├── models.py            # LLM and embedding helpers
 │       ├── graph_rag.py         # LangGraph RAG graph (ingest_query → retrieve_rag → generate_answer)
+│       ├── api/                 # Standalone retriever HTTP API (no RAG graph)
 │       ├── document_processor_cli.py  # CLI for extraction/chunking/indexing/persistence
 │       ├── document_processing/ # PDF extraction, chunking, and optional image captioning
 │       ├── retrieval/           # Retrieval adapters and orchestration (including dual retrieval)
@@ -72,10 +78,13 @@ The main application entry point is in `src/etb_project/main.py`. This module:
 ```mermaid
 flowchart LR
   Config[Config] --> Main[main]
-  Main --> LoadIndex[load_persisted_indices]
+  Main --> Mode{retriever_mode}
+  Mode -->|local| LoadIndex[load_persisted_indices]
   LoadIndex --> Retriever[DualRetriever]
+  Mode -->|remote| RetrieverAPI[Retriever_HTTP_API]
   Main --> LangGraphRAG["LangGraph RAG graph"]
   Retriever --> LangGraphRAG
+  RetrieverAPI --> LangGraphRAG
   LangGraphRAG --> LLMAnswer["LLM answer"]
 ```
 
@@ -83,6 +92,18 @@ flowchart LR
 - **Index load** (`etb_project.vectorstore`): loads the persisted vector indices that were built during document processing.
 - **Retriever** (`etb_project.retrieval.dual_retriever.DualRetriever`): merges/de-duplicates results from the text index and caption index.
 - **LangGraph RAG graph** (`etb_project.graph_rag`): orchestrates `ingest_query → retrieve_rag → generate_answer`.
+
+### Standalone retriever API (optional)
+
+The retriever API exposes:
+
+- `POST /v1/retrieve`: returns retrieved chunks (content + metadata)
+- `POST /v1/index/documents`: upload PDFs and update the persisted dual index
+
+The RAG layer remains outside of this service. The orchestrator can switch to remote mode using:
+
+- `ETB_RETRIEVER_MODE=remote`
+- `RETRIEVER_BASE_URL=http://<host>:8000`
 
 ### Index building (offline step)
 
