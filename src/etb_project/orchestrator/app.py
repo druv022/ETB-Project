@@ -270,6 +270,12 @@ def create_app() -> FastAPI:
             max_retrieve=settings.agent_max_retrieve,
             max_steps=settings.agent_max_steps,
             max_context_chars=settings.agent_max_context_chars,
+            grounded_finalize_mode=settings.grounded_finalize_mode,
+            writer_max_steps=settings.writer_max_steps,
+            writer_max_retrieve=settings.writer_max_retrieve,
+            writer_max_context_chars=settings.writer_max_context_chars,
+            writer_max_messages=settings.writer_max_messages,
+            writer_session_messages=settings.writer_session_messages,
         )
         initial: dict[str, Any] = {
             "query": body.message,

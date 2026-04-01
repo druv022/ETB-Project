@@ -159,6 +159,12 @@ def main() -> None:
         max_retrieve=orch.agent_max_retrieve,
         max_steps=orch.agent_max_steps,
         max_context_chars=orch.agent_max_context_chars,
+        grounded_finalize_mode=orch.grounded_finalize_mode,
+        writer_max_steps=orch.writer_max_steps,
+        writer_max_retrieve=orch.writer_max_retrieve,
+        writer_max_context_chars=orch.writer_max_context_chars,
+        writer_max_messages=orch.writer_max_messages,
+        writer_session_messages=orch.writer_session_messages,
     )
     if mode == "remote":
         logger.info("Interactive agent mode (remote HTTP retriever)")

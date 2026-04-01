@@ -157,3 +157,47 @@ def test_agent_max_steps_force_finalize(mock_llm: MagicMock) -> None:
     assert "[Note: Step limit reached" in (
         result.get("answer") or ""
     ) or "Step limit" in (result.get("answer") or "")
+
+
+def test_agent_subagent_finalize(mock_llm: MagicMock) -> None:
+    """With grounded_finalize_mode=subagent, finalize runs writer tool loop."""
+    agent_bound = MagicMock()
+    writer_bound = MagicMock()
+
+    def _bind_tools(tools: list[Any]) -> MagicMock:
+        if len(tools) == 3:
+            return agent_bound
+        return writer_bound
+
+    mock_llm.bind_tools.side_effect = _bind_tools
+    agent_bound.invoke.return_value = AIMessage(
+        content="",
+        tool_calls=[_tool_call("finalize_answer", {}, "fc1")],
+    )
+    writer_bound.invoke.return_value = AIMessage(
+        content="",
+        tool_calls=[
+            _tool_call("submit_final_answer", {"answer": "Subagent answer."}, "w1")
+        ],
+    )
+
+    retriever = DummyRetriever([])
+    graph = build_agent_orchestrator_graph(
+        llm=mock_llm,
+        retriever=retriever,
+        max_retrieve=4,
+        max_steps=10,
+        max_context_chars=48_000,
+        grounded_finalize_mode="subagent",
+        writer_max_steps=5,
+        writer_max_retrieve=1,
+        writer_max_messages=20,
+        writer_session_messages="answer_only",
+    )
+    result = graph.invoke({"query": "Q?", "messages": []})
+    assert result.get("route") == "answer"
+    assert "Subagent answer." in (result.get("answer") or "")
+    audits = result.get("tool_calls") or []
+    names = [a.get("tool") for a in audits if isinstance(a, dict)]
+    assert "finalize_answer" in names
+    assert "writer_submit_final_answer" in names

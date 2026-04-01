@@ -8,6 +8,10 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from typing import Literal
+
+GroundedFinalizeMode = Literal["direct", "subagent"]
+WriterSessionMessagesPolicy = Literal["answer_only", "full"]
 
 
 @dataclass(frozen=True)
@@ -24,6 +28,13 @@ class OrchestratorSettings:
     agent_max_retrieve: int
     agent_max_steps: int
     agent_max_context_chars: int
+
+    grounded_finalize_mode: GroundedFinalizeMode
+    writer_max_steps: int
+    writer_max_retrieve: int
+    writer_max_context_chars: int
+    writer_max_messages: int
+    writer_session_messages: WriterSessionMessagesPolicy
 
 
 def _split_csv_env(name: str) -> list[str]:
@@ -50,6 +61,21 @@ def load_orchestrator_settings() -> OrchestratorSettings:
         os.environ.get("ETB_AGENT_MAX_CONTEXT_CHARS", "48000")
     )
 
+    mode_raw = os.environ.get("ETB_GROUNDED_FINALIZE_MODE", "direct").strip().lower()
+    grounded_finalize_mode: GroundedFinalizeMode = (
+        "subagent" if mode_raw == "subagent" else "direct"
+    )
+    writer_max_steps = int(os.environ.get("ETB_WRITER_MAX_STEPS", "6"))
+    writer_max_retrieve = int(os.environ.get("ETB_WRITER_MAX_RETRIEVE", "2"))
+    writer_max_context_chars = int(
+        os.environ.get("ETB_WRITER_MAX_CONTEXT_CHARS", str(agent_max_context_chars))
+    )
+    writer_max_messages = int(os.environ.get("ETB_WRITER_MAX_MESSAGES", "40"))
+    pol = os.environ.get("ETB_WRITER_SESSION_MESSAGES", "answer_only").strip().lower()
+    writer_session_messages: WriterSessionMessagesPolicy = (
+        "full" if pol == "full" else "answer_only"
+    )
+
     return OrchestratorSettings(
         host=host,
         port=port,
@@ -60,4 +86,10 @@ def load_orchestrator_settings() -> OrchestratorSettings:
         agent_max_retrieve=agent_max_retrieve,
         agent_max_steps=agent_max_steps,
         agent_max_context_chars=agent_max_context_chars,
+        grounded_finalize_mode=grounded_finalize_mode,
+        writer_max_steps=writer_max_steps,
+        writer_max_retrieve=writer_max_retrieve,
+        writer_max_context_chars=writer_max_context_chars,
+        writer_max_messages=writer_max_messages,
+        writer_session_messages=writer_session_messages,
     )
