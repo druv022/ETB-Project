@@ -36,6 +36,13 @@ Request body:
 { "query": "string", "k": 10 }
 ```
 
+Optional fields:
+
+- `strategy`: `"dense"` or `"hybrid"` (sparse BM25 + dense); default from `ETB_RETRIEVE_STRATEGY`.
+- `reranker`: `"off"`, `"cosine"`, `"cross_encoder"`, or `"llm"`; default from `ETB_RERANKER`.
+- `hyde_mode`: `"off"`, `"replace"`, or `"fuse"`. Controls **dense** HyDE (hypothetical document embedding) heads. Omitted → `ETB_HYDE_MODE` (default `off`). BM25 always uses the user `query` string, not the hypothetical passage. Final reranking uses the user `query`, not HyDE text.
+- `expand`: optional boolean. When the index includes hierarchical metadata (`hierarchy.sqlite` + manifest), `true` replaces top child hits with **parent page** text (collapsed by `parent_id`, order preserved). Omitted → `ETB_HIER_EXPAND_DEFAULT` (default `true`). Ignored when the index is legacy (no hierarchy).
+
 Response body:
 
 ```json
@@ -52,6 +59,15 @@ Notes:
 - `k` is bounded by configuration (`ETB_MAX_RETRIEVE_K`, max 100).
 - Requests may be rate limited (429) based on `ETB_RATE_LIMIT_PER_MINUTE`.
 - Chunk `metadata` is JSON-safe: nested dicts/lists (e.g. `image_captions`) are preserved, not stringified.
+- With a hierarchical index, after expansion chunk `content` may be full page text; `metadata` may include `hierarchy_expanded`. The number of chunks can be **less than `k`** when multiple child hits map to the same parent.
+
+### Hierarchical index env (optional)
+
+| Variable | Default | Meaning |
+|----------|---------|--------|
+| `ETB_HIER_EXPAND_DEFAULT` | `true` | Default for `expand` when the request omits it and hierarchy is present. |
+| `ETB_PARENT_CONTEXT_CHARS` | `12000` | Max total characters of parent text returned after expansion. |
+| `ETB_MAX_PARENTS` | `20` | Max distinct parent pages emitted in one response after expansion. |
 
 #### `GET /v1/assets/{asset_path}`
 
@@ -86,7 +102,7 @@ If `RETRIEVER_API_KEY` is set on the service, requests must include:
 
 - The API **writes uploaded PDFs** to `ETB_UPLOAD_DIR` (default `data/uploads/`).
 - It writes extracted artifacts to `ETB_DOCUMENT_OUTPUT_DIR` (default `data/document_output/`).
-- Chunking uses `ETB_CHUNK_SIZE` (default 1000) and `ETB_CHUNK_OVERLAP` (default 200).
+- Chunking uses `ETB_CHUNK_SIZE` (default 1000) and `ETB_CHUNK_OVERLAP` (default 200). Text FAISS is built from **per-page** child chunks; full-page bodies live in `vector_store_path/hierarchy.sqlite` for expansion.
 - Vector store persistence location comes from `vector_store_path` in `src/config/settings.yaml` (or `ETB_CONFIG` override).
 
 ### Error codes
