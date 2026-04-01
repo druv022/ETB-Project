@@ -17,6 +17,8 @@ class IndexManifest:
     chunk_overlap: int
     embedding_model_id: str
     created_at: str
+    sparse_backend: str | None = None
+    sparse_version: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -33,6 +35,8 @@ class IndexManifest:
         chunk_size: int,
         chunk_overlap: int,
         embedding_model_id: str,
+        sparse_backend: str | None = None,
+        sparse_version: str | None = None,
     ) -> IndexManifest:
         return IndexManifest(
             backend=backend,
@@ -41,6 +45,8 @@ class IndexManifest:
             chunk_overlap=chunk_overlap,
             embedding_model_id=embedding_model_id,
             created_at=IndexManifest._now_iso(),
+            sparse_backend=sparse_backend,
+            sparse_version=sparse_version,
         )
 
     def save(self, path: Path) -> None:
@@ -60,4 +66,10 @@ class IndexManifest:
             chunk_overlap=int(data["chunk_overlap"]),
             embedding_model_id=str(data["embedding_model_id"]),
             created_at=str(data.get("created_at", IndexManifest._now_iso())),
+            sparse_backend=(
+                str(data["sparse_backend"]) if data.get("sparse_backend") else None
+            ),
+            sparse_version=(
+                str(data["sparse_version"]) if data.get("sparse_version") else None
+            ),
         )

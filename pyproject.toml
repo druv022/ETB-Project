@@ -40,6 +40,7 @@ dependencies = [
     "PyMuPDF>=1.24.0",
     "Pillow>=10.0.0",
     "httpx>=0.27.0",
+    "rank-bm25>=0.2.2",
 ]
 
 [project.optional-dependencies]
@@ -141,6 +142,14 @@ warn_unused_ignores = false
 [[tool.mypy.overrides]]
 module = "etb_project.retrieval.process"
 ignore_missing_imports = true
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
+module = "etb_project.retrieval.pipeline"
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
+module = "etb_project.retrieval.sparse_retriever"
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]

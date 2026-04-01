@@ -43,6 +43,7 @@ from etb_project.api.schemas import (
 )
 from etb_project.api.settings import RetrieverAPISettings, load_api_settings
 from etb_project.api.state import RetrieverServiceState, _serialize_metadata
+from etb_project.retrieval.exceptions import HybridSparseUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -390,7 +391,7 @@ def create_app() -> FastAPI:
         k = min(k, settings.max_retrieve_k)
 
         try:
-            docs = state.retrieve(body.query, k)
+            docs = state.retrieve(body, k, settings)
         except FileNotFoundError:
             raise RetrieverAPIError(
                 503,
@@ -398,6 +399,13 @@ def create_app() -> FastAPI:
                 "Vector index is not available. Build or upload documents first.",
                 str(state.vector_store_root),
             ) from None
+        except HybridSparseUnavailableError as exc:
+            raise RetrieverAPIError(
+                503,
+                "SPARSE_INDEX_UNAVAILABLE",
+                str(exc),
+                str(state.vector_store_root),
+            ) from exc
         except Exception as exc:
             logger.exception("retrieve_failed: %s", exc)
             raise RetrieverAPIError(

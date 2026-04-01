@@ -20,11 +20,22 @@ class FaissDualVectorStoreBackend(DualVectorStoreBackend):
 
     def is_ready(self, root: Path) -> bool:
         manifest_path = root / self.manifest_filename
-        return (
+        if not (
             manifest_path.exists()
             and (root / self.text_dirname).exists()
             and (root / self.captions_dirname).exists()
-        )
+        ):
+            return False
+        try:
+            manifest = IndexManifest.load(manifest_path)
+        except Exception:
+            return False
+        if manifest.sparse_backend:
+            sparse = root / "sparse"
+            for name in ("version.txt", "text_corpus.jsonl", "captions_corpus.jsonl"):
+                if not (sparse / name).is_file():
+                    return False
+        return True
 
     def persist(
         self,

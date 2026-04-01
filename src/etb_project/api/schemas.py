@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -15,7 +15,15 @@ class RetrieveRequest(BaseModel):
         default=None,
         ge=1,
         le=100,
-        description="Top-k per sub-retriever; merged total may be up to 2*k before dedup.",
+        description="Final number of chunks to return after ensemble fusion and reranking.",
+    )
+    strategy: Literal["dense", "hybrid"] | None = Field(
+        default=None,
+        description="Retrieval strategy; omit to use ETB_RETRIEVE_STRATEGY (default dense).",
+    )
+    reranker: Literal["off", "cosine", "cross_encoder", "llm"] | None = Field(
+        default=None,
+        description="Reranker backend; omit to use ETB_RERANKER.",
     )
 
 

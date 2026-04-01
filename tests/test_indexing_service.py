@@ -16,6 +16,16 @@ from etb_project.vectorstore.indexing_service import (
     build_and_persist_index_for_pdfs,
     build_dual_vectorstores_from_pdfs,
 )
+from etb_project.vectorstore.sparse_export import SPARSE_VERSION
+
+
+@pytest.fixture(autouse=True)
+def _noop_sparse_export(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Vectorstore mocks are not FAISS; skip JSONL export in unit tests."""
+    monkeypatch.setattr(
+        "etb_project.vectorstore.indexing_service.export_sparse_corpus_from_vectorstores",
+        lambda *a, **k: None,
+    )
 
 
 def test_build_and_persist_index_happy_path() -> None:
@@ -60,6 +70,8 @@ def test_build_and_persist_index_happy_path() -> None:
     assert call_kwargs["manifest"].chunk_overlap == 10
     assert call_kwargs["manifest"].embedding_model_id == DEFAULT_EMBEDDING_MODEL_ID
     assert call_kwargs["manifest"].created_at  # non-empty string
+    assert call_kwargs["manifest"].sparse_backend == "bm25"
+    assert call_kwargs["manifest"].sparse_version == SPARSE_VERSION
 
 
 def test_build_and_persist_index_backend_name_fallback_to_faiss() -> None:

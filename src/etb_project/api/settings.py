@@ -23,6 +23,20 @@ def _env_bool(name: str, default: bool) -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
+def _env_strategy(default: str = "dense") -> str:
+    raw = os.environ.get("ETB_RETRIEVE_STRATEGY", default).strip().lower()
+    if raw in ("dense", "hybrid"):
+        return raw
+    return default
+
+
+def _env_reranker(default: str = "off") -> str:
+    raw = os.environ.get("ETB_RERANKER", default).strip().lower()
+    if raw in ("off", "cosine", "cross_encoder", "llm"):
+        return raw
+    return default
+
+
 @dataclass(frozen=True)
 class RetrieverAPISettings:
     """Configuration for ``uvicorn`` and route limits."""
@@ -41,6 +55,12 @@ class RetrieverAPISettings:
     log_level: str
     index_shutdown_timeout_s: float
     job_poll_enabled: bool
+    default_retrieve_strategy: str
+    retrieval_k_fetch: int | None
+    k_fetch_hard_cap: int
+    rrf_k: int
+    ensemble_cap: int
+    default_reranker: str
 
 
 def load_api_settings() -> RetrieverAPISettings:
@@ -61,6 +81,9 @@ def load_api_settings() -> RetrieverAPISettings:
 
     default_k = cfg.retriever_k
     max_k = min(100, _env_int("ETB_MAX_RETRIEVE_K", 100))
+
+    kfetch_env = os.environ.get("ETB_RETRIEVAL_K_FETCH", "").strip()
+    retrieval_k_fetch = int(kfetch_env) if kfetch_env else None
 
     api_key = os.environ.get("RETRIEVER_API_KEY")
     if api_key is not None and api_key.strip() == "":
@@ -83,4 +106,10 @@ def load_api_settings() -> RetrieverAPISettings:
             os.environ.get("ETB_INDEX_SHUTDOWN_TIMEOUT_S", "120")
         ),
         job_poll_enabled=_env_bool("ETB_INDEX_ASYNC", True),
+        default_retrieve_strategy=_env_strategy("dense"),
+        retrieval_k_fetch=retrieval_k_fetch,
+        k_fetch_hard_cap=_env_int("ETB_K_FETCH_CAP", 100),
+        rrf_k=_env_int("ETB_RRF_K", 60),
+        ensemble_cap=_env_int("ETB_ENSEMBLE_CAP", 80),
+        default_reranker=_env_reranker("off"),
     )

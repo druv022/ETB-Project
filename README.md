@@ -144,6 +144,8 @@ ETB-Project/
 
 For a fuller component diagram and boundaries, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
+Planned retriever enhancements (BM25, HyDE, hierarchy, ensemble + rerank) are specified under [`docs/plans/`](docs/plans/README.md).
+
 ## Contributing
 
 Please read [CONTRIBUTING.md](docs/CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.

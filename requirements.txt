@@ -20,6 +20,7 @@ reportlab>=4.0.0
 PyMuPDF>=1.24.0
 Pillow>=10.0.0
 httpx>=0.27.0
+rank-bm25>=0.2.2
 
 # Streamlit UI (Option A: UI calls orchestrator)
 streamlit>=1.31.0

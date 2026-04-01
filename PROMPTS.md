@@ -124,3 +124,9 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-03-31**: `The source name is confusing: 1. f411370fd13b44fbb0c18db63207e351_pdf_with_image.pdf • p.1/1 — Provide only the necessary information. The first part is unnecessary for the user.` (Context: add `display_name_for_source_file` in `ui/asset_paths.py` to strip retriever upload prefix `{uuid.hex}_`; use in Streamlit `_format_source_header`; tests in `test_ui_asset_paths.py`.)
 
 - **2026-03-31**: `Orion pre-retrieval clarification (conditional LangGraph) — implement the plan; use conda etb env.` (Context: add `orchestrator/prompts.py`, `orion_parse.py`, `session_messages.py`; extend `graph_rag.py` with `orion_gate` and conditional edges; orchestrator chat `phase` + message serialization; `ETB_ORION_CLARIFY`; CLI/studio `enable_orion_gate=False`; tests and docs. Run `conda run -n etb pytest`.)
+
+- **2026-03-31**: `Retrieval technique plan documents (four files) — Implement the plan as specified...` (Context: add `docs/plans/` specs for BM25, HyDE, hierarchical retrieval, and ensemble+rerank pipeline per meta-plan; `docs/plans/README.md`; index link from `docs/README.md`; do not edit `.cursor/plans` file.)
+
+- **2026-04-01**: `Update the plan docs/plans/retrieval-keyword-bm25.md instead of creating separate file.` (Context: merge gap-analysis items into the BM25 plan—prerequisite ensemble pipeline, non-goals/local CLI, RRF cross-ref, doc_id vs fusion key, manifest on append, readiness/corrupt sparse/settings, atomicity, empty caption head, HTTP contract migration, orchestrator default, k_fetch limits.)
+
+- **2026-04-01**: `use conda etb env` (Context: run pytest with `conda run -n etb`; fix circular import by lazy-exporting `create_app` in `etb_project.api.__init__` so `pipeline` → `api.schemas` does not eagerly import `app` → `state` → `pipeline`; 161 tests passed.)

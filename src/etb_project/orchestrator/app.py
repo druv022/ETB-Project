@@ -112,7 +112,12 @@ def _build_retriever(settings: OrchestratorSettings, k: int) -> RemoteRetriever:
             "CONFIG_ERROR",
             "RETRIEVER_BASE_URL is not configured for the orchestrator.",
         )
-    return RemoteRetriever(settings.retriever_base_url, k=k, timeout_s=60.0)
+    return RemoteRetriever(
+        settings.retriever_base_url,
+        k=k,
+        timeout_s=60.0,
+        strategy=settings.retriever_strategy,
+    )
 
 
 def create_app() -> FastAPI:

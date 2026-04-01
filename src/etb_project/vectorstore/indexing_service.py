@@ -18,6 +18,7 @@ from etb_project.retrieval.process import (
 
 from .base import DualVectorStoreBackend
 from .manifest import IndexManifest
+from .sparse_export import SPARSE_VERSION, export_sparse_corpus_from_vectorstores
 
 # Stable tag used for manifest metadata.
 # If you later make the embedding model configurable, update this to match.
@@ -54,6 +55,8 @@ def build_and_persist_index(
         chunk_size=chunking_config.chunk_size,
         chunk_overlap=chunking_config.chunk_overlap,
         embedding_model_id=DEFAULT_EMBEDDING_MODEL_ID,
+        sparse_backend="bm25",
+        sparse_version=SPARSE_VERSION,
     )
 
     backend.persist(
@@ -61,6 +64,11 @@ def build_and_persist_index(
         text_vectorstore=text_vectorstore,
         caption_vectorstore=caption_vectorstore,
         manifest=manifest,
+    )
+    export_sparse_corpus_from_vectorstores(
+        text_vectorstore,
+        caption_vectorstore,
+        vector_store_dir,
     )
     return text_vectorstore, caption_vectorstore
 
@@ -140,6 +148,8 @@ def build_and_persist_index_for_pdfs(
         chunk_size=chunking_config.chunk_size,
         chunk_overlap=chunking_config.chunk_overlap,
         embedding_model_id=DEFAULT_EMBEDDING_MODEL_ID,
+        sparse_backend="bm25",
+        sparse_version=SPARSE_VERSION,
     )
 
     backend.persist(
@@ -147,6 +157,11 @@ def build_and_persist_index_for_pdfs(
         text_vectorstore=text_vectorstore,
         caption_vectorstore=caption_vectorstore,
         manifest=manifest,
+    )
+    export_sparse_corpus_from_vectorstores(
+        text_vectorstore,
+        caption_vectorstore,
+        vector_store_dir,
     )
     return text_vectorstore, caption_vectorstore
 
@@ -223,17 +238,34 @@ def append_to_and_persist_index_for_pdfs(
         if caption_docs:
             append_documents_to_faiss(existing_caption_vectorstore, caption_docs)
 
+    prev_backend = getattr(existing_manifest, "sparse_backend", None)
+    sparse_backend = (
+        prev_backend if isinstance(prev_backend, str) and prev_backend else "bm25"
+    )
+    prev_version = getattr(existing_manifest, "sparse_version", None)
+    sparse_version = (
+        prev_version
+        if isinstance(prev_version, str) and prev_version
+        else SPARSE_VERSION
+    )
     updated_manifest = IndexManifest.create(
         backend=str(getattr(backend, "backend_name", existing_manifest.backend)),
         pdf_path=_combine_pdf_path_field(existing_manifest.pdf_path, pdf_paths_sorted),
         chunk_size=chunking_config.chunk_size,
         chunk_overlap=chunking_config.chunk_overlap,
         embedding_model_id=existing_manifest.embedding_model_id,
+        sparse_backend=sparse_backend,
+        sparse_version=sparse_version,
     )
     backend.persist(
         vector_store_dir,
         text_vectorstore=existing_text_vectorstore,
         caption_vectorstore=existing_caption_vectorstore,
         manifest=updated_manifest,
+    )
+    export_sparse_corpus_from_vectorstores(
+        existing_text_vectorstore,
+        existing_caption_vectorstore,
+        vector_store_dir,
     )
     return existing_text_vectorstore, existing_caption_vectorstore

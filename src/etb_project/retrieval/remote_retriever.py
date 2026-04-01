@@ -22,10 +22,12 @@ class RemoteRetriever:
         k: int = 10,
         timeout_s: float = 60.0,
         api_key: str | None = None,
+        strategy: str | None = None,
     ) -> None:
         self._base = base_url.rstrip("/")
         self._k = k
         self._timeout = timeout_s
+        self._strategy = strategy
         headers: dict[str, str] = {}
         key = api_key or os.environ.get("RETRIEVER_API_KEY")
         if key:
@@ -36,6 +38,8 @@ class RemoteRetriever:
         """One HTTP round-trip per ``invoke`` (option A in deployment docs)."""
         url = f"{self._base}/v1/retrieve"
         payload: dict[str, Any] = {"query": query, "k": self._k}
+        if self._strategy in ("dense", "hybrid"):
+            payload["strategy"] = self._strategy
         try:
             response = self._client.post(url, json=payload)
         except httpx.RequestError as exc:
