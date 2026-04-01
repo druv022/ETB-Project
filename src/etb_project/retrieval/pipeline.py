@@ -1,20 +1,29 @@
-"""Ensemble retrieval: dense FAISS heads, optional BM25, RRF, optional cosine rerank."""
+"""Ensemble retrieval: dense FAISS heads, optional BM25, RRF, optional rerankers."""
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 from collections import defaultdict
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from etb_project.api.schemas import RetrieveRequest
 from etb_project.api.settings import RetrieverAPISettings
-from etb_project.retrieval.hyde import generate_hypothetical_passage, resolve_hyde_mode
+from etb_project.retrieval.hyde import (
+    generate_hypothetical_passage,
+    get_retriever_chat_llm,
+    resolve_hyde_mode,
+)
 from etb_project.retrieval.sparse_retriever import Bm25DualSparseRetriever
 from etb_project.vectorstore.hierarchy_store import expand_child_hits_to_parents
 
@@ -33,6 +42,17 @@ HEAD_ORDER = (
     "bm25_caption",
     "hier_child",
 )
+
+_MAX_HEAD_WORKERS = 4
+
+_RERANK_LLM_SYSTEM = (
+    "You score how relevant each passage is to answering the user query. "
+    'Reply with ONLY a JSON object: {"scores": [<integer 0-10>, ...]} with exactly '
+    "one score per passage, in the same order as given."
+)
+
+_cross_encoder_model_loaded: str | None = None
+_cross_encoder_instance: Any = None
 
 
 def rrf_doc_key(doc: Document) -> tuple:
@@ -125,6 +145,126 @@ def _cosine_rerank(
     return [docs[i] for _, i in scored]
 
 
+def _get_cross_encoder(model_name: str) -> Any:
+    global _cross_encoder_model_loaded, _cross_encoder_instance
+    try:
+        from sentence_transformers import CrossEncoder
+    except ImportError as exc:
+        raise ImportError(
+            "cross_encoder reranker requires sentence-transformers "
+            "(pip install sentence-transformers)"
+        ) from exc
+    if _cross_encoder_instance is None or _cross_encoder_model_loaded != model_name:
+        _cross_encoder_instance = CrossEncoder(model_name)
+        _cross_encoder_model_loaded = model_name
+    return _cross_encoder_instance
+
+
+def _cross_encoder_rerank(
+    query: str,
+    docs: list[Document],
+    model_name: str,
+) -> list[Document]:
+    if not docs:
+        return []
+    ce = _get_cross_encoder(model_name)
+    pairs = [[query, d.page_content or ""] for d in docs]
+    raw = ce.predict(pairs)
+    arr = np.asarray(raw, dtype=np.float64).reshape(-1)
+    order = np.argsort(-arr)
+    return [docs[int(i)] for i in order]
+
+
+def _extract_text_ai(message: AIMessage) -> str:
+    content = message.content
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                parts.append(str(block.get("text", "")))
+            elif isinstance(block, str):
+                parts.append(block)
+        return "".join(parts).strip()
+    return str(content).strip()
+
+
+def _parse_llm_scores_json(text: str, expected: int) -> list[float] | None:
+    text = text.strip()
+    m = re.search(r"\{[\s\S]*\}\s*$", text)
+    if m:
+        text = m.group(0)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    scores = data.get("scores")
+    if not isinstance(scores, list) or len(scores) != expected:
+        return None
+    out: list[float] = []
+    for s in scores:
+        if isinstance(s, bool) or not isinstance(s, (int, float)):
+            return None
+        out.append(float(max(0, min(10, int(s)))))
+    return out
+
+
+def _llm_rerank(
+    query: str,
+    docs: list[Document],
+    settings: RetrieverAPISettings,
+    *,
+    request_id: str | None = None,
+) -> list[Document]:
+    llm = get_retriever_chat_llm()
+    if llm is None:
+        raise RuntimeError("LLM reranker: chat LLM unavailable")
+    if not docs:
+        return []
+    batch_size = settings.llm_rerank_batch_size
+    all_scores: list[float] = []
+    offset = 0
+    rid = f" request_id={request_id}" if request_id else ""
+
+    while offset < len(docs):
+        batch = docs[offset : offset + batch_size]
+        lines = [f"[{j}] {d.page_content[:4000]}" for j, d in enumerate(batch)]
+        user_content = (
+            f"Query:\n{query.strip()}\n\n"
+            f"Passages (score each 0-10 for relevance to the query):\n"
+            + "\n\n".join(lines)
+        )
+        messages = [
+            SystemMessage(content=_RERANK_LLM_SYSTEM),
+            HumanMessage(content=user_content),
+        ]
+        try:
+            try:
+                bound = llm.bind(max_tokens=512)
+                response = bound.invoke(messages)
+            except (TypeError, ValueError, AttributeError):
+                response = llm.invoke(messages)
+        except Exception as exc:
+            logger.warning("LLM rerank batch failed%s: %s", rid, exc)
+            raise
+
+        text = (
+            _extract_text_ai(response)
+            if isinstance(response, AIMessage)
+            else str(response).strip()
+        )
+        parsed = _parse_llm_scores_json(text, len(batch))
+        if parsed is None:
+            logger.warning("LLM rerank: could not parse scores%s", rid)
+            raise ValueError("invalid LLM rerank JSON")
+        all_scores.extend(parsed)
+        offset += batch_size
+
+    order = sorted(range(len(docs)), key=lambda i: -all_scores[i])
+    return [docs[i] for i in order]
+
+
 def effective_k_fetch(k: int, settings: RetrieverAPISettings) -> int:
     if settings.retrieval_k_fetch is not None:
         base = settings.retrieval_k_fetch
@@ -167,6 +307,26 @@ def _tag_head(docs: list[Document], head_id: str) -> list[Document]:
     return out
 
 
+def _execute_heads_parallel(
+    tasks: list[tuple[str, Callable[[], list[Document]]]],
+) -> list[tuple[str, list[Document]]]:
+    """Run independent head callables; preserve ``HEAD_ORDER`` in output."""
+    if not tasks:
+        return []
+    by_id: dict[str, list[Document]] = {}
+    if len(tasks) == 1:
+        hid, fn = tasks[0]
+        by_id[hid] = _tag_head(fn(), hid)
+    else:
+        workers = min(_MAX_HEAD_WORKERS, len(tasks))
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            future_to_hid = {ex.submit(fn): hid for hid, fn in tasks}
+            for fut in as_completed(future_to_hid):
+                hid = future_to_hid[fut]
+                by_id[hid] = _tag_head(fut.result(), hid)
+    return [(hid, by_id[hid]) for hid in HEAD_ORDER if hid in by_id]
+
+
 def run_retrieval(
     *,
     request: RetrieveRequest,
@@ -199,56 +359,71 @@ def run_retrieval(
     include_query_dense = (hyde_mode != "replace") or (not hyde_usable)
     include_hyde_dense = hyde_usable and hyde_mode in ("replace", "fuse")
 
-    heads: list[tuple[str, list[Document]]] = []
-
     text_r_kw = {"k": k_fetch}
+    tasks: list[tuple[str, Callable[[], list[Document]]]] = []
+
     if include_query_dense:
         text_retriever_q = text_vs.as_retriever(search_kwargs=text_r_kw)
         caption_retriever_q = caption_vs.as_retriever(search_kwargs=text_r_kw)
-        heads.append(
-            (
-                "dense_text_q",
-                _tag_head(list(text_retriever_q.invoke(q)), "dense_text_q"),
-            )
-        )
-        heads.append(
-            (
-                "dense_caption_q",
-                _tag_head(list(caption_retriever_q.invoke(q)), "dense_caption_q"),
-            )
-        )
+
+        def _dense_text_q() -> list[Document]:
+            return list(text_retriever_q.invoke(q))
+
+        def _dense_caption_q() -> list[Document]:
+            return list(caption_retriever_q.invoke(q))
+
+        tasks.append(("dense_text_q", _dense_text_q))
+        tasks.append(("dense_caption_q", _dense_caption_q))
 
     if include_hyde_dense and H is not None:
         text_retriever_h = text_vs.as_retriever(search_kwargs=text_r_kw)
         caption_retriever_h = caption_vs.as_retriever(search_kwargs=text_r_kw)
-        heads.append(
-            (
-                "dense_text_h",
-                _tag_head(list(text_retriever_h.invoke(H)), "dense_text_h"),
-            )
-        )
-        heads.append(
-            (
-                "dense_caption_h",
-                _tag_head(list(caption_retriever_h.invoke(H)), "dense_caption_h"),
-            )
-        )
+        hh = H
+
+        def _dense_text_h() -> list[Document]:
+            return list(text_retriever_h.invoke(hh))
+
+        def _dense_caption_h() -> list[Document]:
+            return list(caption_retriever_h.invoke(hh))
+
+        tasks.append(("dense_text_h", _dense_text_h))
+        tasks.append(("dense_caption_h", _dense_caption_h))
 
     if strategy == "hybrid" and bm25 is not None:
-        heads.append(("bm25_text", bm25.search_text(q, k_fetch)))
+
+        def _bm25_text() -> list[Document]:
+            return bm25.search_text(q, k_fetch)
+
+        tasks.append(("bm25_text", _bm25_text))
         if bm25.has_caption_index:
-            heads.append(("bm25_caption", bm25.search_captions(q, k_fetch)))
+
+            def _bm25_caption() -> list[Document]:
+                return bm25.search_captions(q, k_fetch)
+
+            tasks.append(("bm25_caption", _bm25_caption))
 
     hierarchy_active = hierarchy_sqlite_path is not None
     if hierarchy_active:
         hier_retriever = text_vs.as_retriever(search_kwargs=text_r_kw)
-        heads.append(
-            ("hier_child", _tag_head(list(hier_retriever.invoke(q)), "hier_child")),
-        )
+
+        def _hier_child() -> list[Document]:
+            return list(hier_retriever.invoke(q))
+
+        tasks.append(("hier_child", _hier_child))
+
+    heads = _execute_heads_parallel(tasks)
 
     k_rrf = settings.rrf_k
     cap = settings.ensemble_cap
     merged = ensemble_rrf(heads, k_rrf=k_rrf, cap=cap)
+
+    if settings.retrieval_debug:
+        logger.info(
+            "retrieval_debug heads=%s rrf_keys=%s request_id=%s",
+            [(h, len(xs)) for h, xs in heads],
+            len(merged),
+            request_id or "",
+        )
 
     if not merged:
         return []
@@ -257,16 +432,24 @@ def run_retrieval(
     try:
         if mode == "cosine":
             merged = _cosine_rerank(q, merged, embeddings)
+        elif mode == "cross_encoder":
+            merged = _cross_encoder_rerank(q, merged, settings.cross_encoder_model)
+        elif mode == "llm":
+            merged = _llm_rerank(q, merged, settings, request_id=request_id)
         elif mode == "off":
             pass
-        else:
-            logger.warning(
-                "Reranker mode %s not implemented; using ensemble order", mode
-            )
     except Exception as exc:
         logger.warning("Rerank failed, using ensemble order: %s", exc)
 
     top = merged[:k]
+
+    if settings.retrieval_debug and top:
+        logger.info(
+            "retrieval_debug post_rerank first_heads=%s request_id=%s",
+            [(d.metadata or {}).get("ensemble_head") for d in top[:3]],
+            request_id or "",
+        )
+
     expand = _resolve_expand(request, settings, hierarchy_active)
     if expand and hierarchy_sqlite_path is not None and hierarchy_sqlite_path.is_file():
         top = expand_child_hits_to_parents(

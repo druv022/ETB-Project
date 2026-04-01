@@ -30,7 +30,7 @@ def _env_strategy(default: str = "dense") -> str:
     return default
 
 
-def _env_reranker(default: str = "off") -> str:
+def _env_reranker(default: str = "cosine") -> str:
     raw = os.environ.get("ETB_RERANKER", default).strip().lower()
     if raw in ("off", "cosine", "cross_encoder", "llm"):
         return raw
@@ -80,6 +80,9 @@ class RetrieverAPISettings:
     hier_expand_default: bool
     parent_context_chars: int
     max_hierarchy_parents: int
+    retrieval_debug: bool
+    llm_rerank_batch_size: int
+    cross_encoder_model: str
 
 
 def load_api_settings() -> RetrieverAPISettings:
@@ -130,10 +133,16 @@ def load_api_settings() -> RetrieverAPISettings:
         k_fetch_hard_cap=_env_int("ETB_K_FETCH_CAP", 100),
         rrf_k=_env_int("ETB_RRF_K", 60),
         ensemble_cap=_env_int("ETB_ENSEMBLE_CAP", 80),
-        default_reranker=_env_reranker("off"),
+        default_reranker=_env_reranker("cosine"),
         default_hyde_mode=_env_hyde_mode("off"),
         hyde_max_tokens=_env_int("ETB_HYDE_MAX_TOKENS", 384),
         hier_expand_default=_env_hier_expand_default(),
         parent_context_chars=_env_int("ETB_PARENT_CONTEXT_CHARS", 12_000),
         max_hierarchy_parents=_env_int("ETB_MAX_PARENTS", 20),
+        retrieval_debug=_env_bool("ETB_RETRIEVAL_DEBUG", False),
+        llm_rerank_batch_size=max(1, _env_int("ETB_LLM_RERANK_BATCH", 8)),
+        cross_encoder_model=os.environ.get(
+            "ETB_CROSS_ENCODER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2"
+        ).strip()
+        or "cross-encoder/ms-marco-MiniLM-L-6-v2",
     )

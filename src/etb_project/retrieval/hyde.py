@@ -28,6 +28,11 @@ def reset_hyde_llm_cache_for_tests() -> None:
     _hyde_llm_init_attempted = False
 
 
+def get_retriever_chat_llm() -> BaseChatModel | None:
+    """Shared lazy chat LLM for HyDE, LLM reranking, and similar retriever features."""
+    return _get_lazy_chat_llm()
+
+
 def _get_lazy_chat_llm() -> BaseChatModel | None:
     """Construct chat LLM once; on failure log and return None for all later calls."""
     global _hyde_llm_instance, _hyde_llm_init_attempted

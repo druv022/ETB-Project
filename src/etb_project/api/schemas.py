@@ -15,7 +15,11 @@ class RetrieveRequest(BaseModel):
         default=None,
         ge=1,
         le=100,
-        description="Final number of chunks to return after ensemble fusion and reranking.",
+        description=(
+            "Final number of child-level chunks after ensemble fusion and reranking. "
+            "With hierarchical parent expansion, the response may contain fewer chunks "
+            "than k after collapsing to unique parents."
+        ),
     )
     strategy: Literal["dense", "hybrid"] | None = Field(
         default=None,

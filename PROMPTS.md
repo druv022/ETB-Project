@@ -130,3 +130,11 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-04-01**: `Update the plan docs/plans/retrieval-keyword-bm25.md instead of creating separate file.` (Context: merge gap-analysis items into the BM25 plan—prerequisite ensemble pipeline, non-goals/local CLI, RRF cross-ref, doc_id vs fusion key, manifest on append, readiness/corrupt sparse/settings, atomicity, empty caption head, HTTP contract migration, orchestrator default, k_fetch limits.)
 
 - **2026-04-01**: `use conda etb env` (Context: run pytest with `conda run -n etb`; fix circular import by lazy-exporting `create_app` in `etb_project.api.__init__` so `pipeline` → `api.schemas` does not eagerly import `app` → `state` → `pipeline`; 161 tests passed.)
+
+- **2026-04-01**: `Implement @docs/plans/retrieval-hyde.md` (Context: HyDE in retriever API — `hyde_mode` on `RetrieveRequest`, `ETB_HYDE_MODE` / `ETB_HYDE_MAX_TOKENS`, `retrieval/hyde.py` + `hyde_prompts.py`, dense heads in `pipeline.py` with RRF order, BM25/rerank unchanged on user query, `RemoteRetriever` forwards `hyde_mode`, retriever Compose LLM env, tests and docs.)
+
+- **2026-04-01**: `Implement @docs/plans/retrieval-hierarchical.md` (Context: per-page child chunks + `hierarchy.sqlite` parents, manifest `hierarchy_backend` / `hierarchy_schema_version`, `hier_child` RRF head + post-rerank expansion, `expand` on `RetrieveRequest`, env caps, `HierarchyStore`, processor + indexing_service + pipeline + state; tests.)
+
+- **2026-04-01**: `fix : @.../terminals/5.txt:8-85` (Context: pre-commit mypy — inline `hierarchy_backend` / `hierarchy_schema_version` in `IndexManifest.create` instead of `**dict[str, str | int]`; type parent rows as `Sequence[HierarchicalParent]` in `hierarchy_store`; Bandit B608 — replace dynamic `IN (...)` with per-id `WHERE parent_id = ?` queries.)
+
+- **2026-04-01**: `use conda etb env` (Context: run retriever-related pytest with `conda activate etb` so `langchain_core` / `fastapi` resolve; 32 tests passed for pipeline, hyde, bm25, api retriever.)

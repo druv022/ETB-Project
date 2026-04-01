@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -32,6 +33,9 @@ def _fake_settings(**overrides: object) -> SimpleNamespace:
         "hier_expand_default": True,
         "parent_context_chars": 12_000,
         "max_hierarchy_parents": 20,
+        "retrieval_debug": False,
+        "llm_rerank_batch_size": 8,
+        "cross_encoder_model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
     }
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -121,12 +125,14 @@ def test_run_retrieval_fuse_four_invokes_with_fixed_hyde() -> None:
             settings=_fake_settings(),
         )
 
-    assert calls == [
-        "user query",
-        "user query",
-        "HYPOTHETICAL PASSAGE",
-        "HYPOTHETICAL PASSAGE",
-    ]
+    assert Counter(calls) == Counter(
+        [
+            "user query",
+            "user query",
+            "HYPOTHETICAL PASSAGE",
+            "HYPOTHETICAL PASSAGE",
+        ]
+    )
 
 
 def test_run_retrieval_replace_two_invokes_hyde_only() -> None:
