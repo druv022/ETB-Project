@@ -84,6 +84,17 @@ A **clarify** turn returns **`sources: []`** because the retriever HTTP API was 
 - `ETB_AGENT_MAX_STEPS` (default `10`): max LLM tool-loop iterations; exceeding triggers forced grounded answer with a step-limit disclaimer.
 - `ETB_AGENT_MAX_CONTEXT_CHARS` (default `48000`): merged context size before generation (first-seen truncation).
 
+**Grounded writer subagent** (optional; used when `finalize_answer`, no-tool fallback, or outer step-limit finalize runs). Default remains a **single** direct grounded LLM call (`direct`). Set `ETB_GROUNDED_FINALIZE_MODE=subagent` to run an inner tool loop (thought/plan, extra `retrieve_more`, `submit_final_answer`) before returning the answer.
+
+- `ETB_GROUNDED_FINALIZE_MODE` (default `direct`): `direct` | `subagent`.
+- `ETB_WRITER_MAX_STEPS` (default `6`): max writer LLM steps per finalize (then one-shot direct fallback with a disclaimer).
+- `ETB_WRITER_MAX_RETRIEVE` (default `2`): max `retrieve_more` calls **inside** the writer (separate from `ETB_AGENT_MAX_RETRIEVE`).
+- `ETB_WRITER_MAX_CONTEXT_CHARS` (default: same as `ETB_AGENT_MAX_CONTEXT_CHARS`): document budget for the writer’s grounded context message.
+- `ETB_WRITER_MAX_MESSAGES` (default `40`): cap on chat messages kept in the writer loop (reduces context bloat from scratchpad tools).
+- `ETB_WRITER_SESSION_MESSAGES` (default `answer_only`): `answer_only` (persist only tool handshake + final assistant reply) | `full` (persist full writer trace for debugging).
+
+Implementation: [`grounded_subagent/`](../src/etb_project/grounded_subagent/).
+
 Service wiring:
 
 - `RETRIEVER_BASE_URL` (required)

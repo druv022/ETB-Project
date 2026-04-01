@@ -69,6 +69,8 @@ docker compose up --build
 
 The repo ships a **standalone retriever HTTP API** (retrieve + index PDFs). The **agentic** LangGraph runs in the **orchestrator** (tool-calling `retrieve` / `ask_clarify` / `finalize_answer`), not in the retriever; the orchestrator calls the retriever only via **HTTP** (`POST /v1/retrieve`). See [`docs/ORCHESTRATOR_API.md`](docs/ORCHESTRATOR_API.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
+**Optional grounded writer:** By default, `finalize_answer` uses one direct grounded generation step. To enable an inner **writer subagent** (extra reasoning/plan tools, `retrieve_more`, then `submit_final_answer`), set `ETB_GROUNDED_FINALIZE_MODE=subagent` and tune `ETB_WRITER_*` variables listed in [`docs/ORCHESTRATOR_API.md`](docs/ORCHESTRATOR_API.md).
+
 3. Open the UI:
 
 - `http://localhost:8501`
@@ -134,6 +136,7 @@ ETB-Project/
 │   └── etb_project/          # Main package (`pip install -e .`)
 │       ├── api/              # Retriever FastAPI
 │       ├── orchestrator/       # Orchestrator FastAPI (chat + asset proxy)
+│       ├── grounded_subagent/  # Optional writer tool loop (finalize path)
 │       ├── ui/                 # Shared helpers for Streamlit (e.g. asset paths)
 │       ├── document_processing/
 │       ├── retrieval/

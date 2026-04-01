@@ -146,6 +146,8 @@ flowchart TD
 
 Details: `retrieve` may run multiple times per turn (up to `ETB_AGENT_MAX_RETRIEVE`); `finalize_answer` ends grounded answering. Guardrails (`ETB_AGENT_MAX_STEPS`, `ETB_AGENT_MAX_CONTEXT_CHARS`) are enforced inside [`agent_graph.py`](../src/etb_project/orchestrator/agent_graph.py).
 
+When `ETB_GROUNDED_FINALIZE_MODE=subagent`, the finalize path runs the optional **grounded writer** subgraph in [`grounded_subagent/`](../src/etb_project/grounded_subagent/) (inner tools, separate `ETB_WRITER_*` limits, then `submit_final_answer` or a direct fallback). Default `direct` keeps a single non-tool grounded LLM call. See [`ORCHESTRATOR_API.md`](ORCHESTRATOR_API.md).
+
 **LangGraph Studio** ([`studio_entry.py`](../src/etb_project/studio_entry.py)) builds the same graph with **`RemoteRetriever`** only (`RETRIEVER_BASE_URL` required).
 
 - **Retriever** (`etb_project.api`): dual FAISS retrieval, PDF indexing, serves files from `ETB_DOCUMENT_OUTPUT_DIR` under `/v1/assets/...`.

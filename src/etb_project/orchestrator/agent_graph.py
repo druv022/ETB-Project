@@ -5,17 +5,16 @@ Graph shape: ``ingest`` (append user query, reset per-turn doc state) → ``befo
 ``handle_no_tools`` → loop or ``END``. Real retrieval uses ``retriever.invoke(query)``;
 ``@tool`` bodies below are placeholders for LangChain tool schemas only.
 
-Retrieved chunks are merged in ``_merge_documents`` using **content** (SHA-256 of
-stripped text), not ``source``/``chunk_id`` keys, so multiple chunks from the same
-file (e.g. text vs image captions) are not collapsed.
+Retrieved chunks are merged in ``merge_documents`` (``rag_document_merge``) using
+**content** (SHA-256 of stripped text), not ``source``/``chunk_id`` keys, so multiple
+chunks from the same file (e.g. text vs image captions) are not collapsed.
 """
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import time
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 
 from langchain_core.documents import Document
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -31,113 +30,17 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
+from etb_project.grounded_subagent.direct import run_direct_grounded_finalize
+from etb_project.grounded_subagent.graph import run_writer_subgraph_for_orchestrator
 from etb_project.orchestrator.agent_system_prompt import (
     AGENT_SYSTEM_PROMPT,
     STEP_LIMIT_DISCLAIMER,
     TOOL_RETRY_PROMPT,
 )
-from etb_project.orchestrator.llm_messages import (
-    build_grounded_answer_human_message,
-    extract_text_from_ai_message,
-    strip_llm_tool_markup,
-    truncate_documents_by_chars,
-)
+from etb_project.orchestrator.llm_messages import strip_llm_tool_markup
+from etb_project.rag_document_merge import merge_documents
 
 logger = logging.getLogger(__name__)
-
-# Minimum suffix/prefix match length to merge consecutive chunks (sliding-window overlap).
-_MIN_BOUNDARY_OVERLAP_CHARS = 15
-
-
-def _content_fingerprint(text: str) -> str:
-    """SHA-256 hex of stripped UTF-8 text — stable across processes (unlike ``hash()``)."""
-    t = (text or "").strip()
-    return hashlib.sha256(t.encode("utf-8", errors="replace")).hexdigest()
-
-
-def _filter_subsumed_by_content(docs: list[Document]) -> list[Document]:
-    """Drop shorter chunks whose stripped text is strictly contained in another chunk."""
-    n = len(docs)
-    if n <= 1:
-        return docs
-    texts = [(d.page_content or "").strip() for d in docs]
-    removed = [False] * n
-    for i in range(n):
-        if not texts[i]:
-            continue
-        for j in range(n):
-            if i == j or removed[i]:
-                break
-            if not texts[j]:
-                continue
-            li, lj = len(texts[i]), len(texts[j])
-            if li < lj and texts[i] in texts[j]:
-                removed[i] = True
-                break
-    return [docs[i] for i in range(n) if not removed[i]]
-
-
-def _merge_boundary_if_overlap(
-    left: str, right: str, *, min_overlap: int
-) -> str | None:
-    """If ``left`` ends with a prefix of ``right``, return ``left + right[k:]``."""
-    if not left or not right:
-        return None
-    max_k = min(len(left), len(right))
-    for k in range(max_k, min_overlap - 1, -1):
-        if left[-k:] == right[:k]:
-            return left + right[k:]
-    return None
-
-
-def _merge_consecutive_overlaps(
-    docs: list[Document], *, min_overlap: int = _MIN_BOUNDARY_OVERLAP_CHARS
-) -> list[Document]:
-    """Merge consecutive chunks that share a long suffix/prefix (RAG window overlap)."""
-    if not docs:
-        return []
-    out: list[Document] = [docs[0]]
-    for d in docs[1:]:
-        left_text = out[-1].page_content or ""
-        right_text = d.page_content or ""
-        merged_text = _merge_boundary_if_overlap(
-            left_text, right_text, min_overlap=min_overlap
-        )
-        if merged_text is not None:
-            out[-1] = Document(
-                page_content=merged_text,
-                metadata=dict(out[-1].metadata or {}),
-            )
-        else:
-            out.append(d)
-    return out
-
-
-def _merge_documents(
-    existing: list[Document], new_docs: list[Document]
-) -> list[Document]:
-    """Merge chunks from repeated ``retrieve`` calls.
-
-    1. Exact duplicate (same stripped text, by SHA-256) — keep first only.
-    2. Shorter text fully contained in a longer chunk — drop the shorter.
-    3. Consecutive chunks with boundary overlap (>= ``_MIN_BOUNDARY_OVERLAP_CHARS``) — merge text.
-    """
-    combined = list(existing) + list(new_docs)
-    if not combined:
-        return []
-
-    seen_fp: set[str] = set()
-    exact_deduped: list[Document] = []
-    for d in combined:
-        t = (d.page_content or "").strip()
-        fp = _content_fingerprint(t)
-        if fp in seen_fp:
-            continue
-        seen_fp.add(fp)
-        exact_deduped.append(d)
-
-    subsumed_filtered = _filter_subsumed_by_content(exact_deduped)
-    return _merge_consecutive_overlaps(subsumed_filtered)
 
 
 # Schemas for ``llm.bind_tools``; execution is implemented in ``execute_tools``.
@@ -187,15 +90,6 @@ class AgentOrchestratorState(TypedDict, total=False):
     session_id: str | None  # For structured logs and multi-turn correlation.
 
 
-def _append_tool_audit(
-    state: AgentOrchestratorState,
-    entry: dict[str, Any],
-) -> list[dict[str, Any]]:
-    tc = list(state.get("tool_calls") or [])
-    tc.append(entry)
-    return tc
-
-
 def _log_tool(
     state: AgentOrchestratorState,
     tool: str,
@@ -227,51 +121,25 @@ def _grounded_generation_update(
     audit_tool: str,
     tool_call_id: str | None = None,
 ) -> AgentOrchestratorState:
-    """Run a non-tool LLM call with delimiter-wrapped context (finalize path).
-
-    When ``tool_call_id`` is set, prepends a ToolMessage so the assistant turn follows
-    OpenAI-style tool-result ordering after ``finalize_answer``.
-    """
-    docs_trunc, truncated = truncate_documents_by_chars(documents, max_context_chars)
-    human = build_grounded_answer_human_message(
-        question=query,
-        documents=docs_trunc,
-        context_truncated=truncated,
+    """Run a non-tool LLM call with delimiter-wrapped context (direct finalize path)."""
+    out = run_direct_grounded_finalize(
+        messages_base=list(state.get("messages") or []),
+        llm=llm,
+        query=query,
+        documents=documents,
+        max_context_chars=max_context_chars,
+        answer_prefix=answer_prefix,
+        audit_tool=audit_tool,
+        tool_call_id=tool_call_id,
+        prior_tool_calls=list(state.get("tool_calls") or []),
+        log_context={
+            "request_id": state.get("request_id"),
+            "session_id": state.get("session_id"),
+            "retrieve_calls_used": state.get("retrieve_calls_used"),
+            "agent_steps": state.get("agent_steps"),
+        },
     )
-    base = list(state.get("messages") or [])
-    prefix: list[AnyMessage] = []
-    if tool_call_id is not None:
-        prefix.append(
-            ToolMessage(
-                content="Proceeding to grounded generation.",
-                tool_call_id=tool_call_id,
-            )
-        )
-    msgs_for_invoke = base + prefix + [human]
-    t0 = time.monotonic()
-    response = llm.invoke(msgs_for_invoke)
-    duration_ms = (time.monotonic() - t0) * 1000
-    _log_tool(state, audit_tool, duration_ms=duration_ms, extra="invoke=generate")
-    delta: list[AnyMessage] = prefix + [human]
-    if isinstance(response, AIMessage):
-        delta.append(response)
-        answer_text = extract_text_from_ai_message(response)
-    else:
-        answer_text = strip_llm_tool_markup(str(response).strip())
-    if answer_prefix:
-        answer_text = f"{answer_prefix}\n{answer_text}"
-    out: AgentOrchestratorState = {
-        "messages": delta,
-        "answer": answer_text,
-        "route": "answer",
-        "context_docs": docs_trunc,
-        "context_truncated": truncated,
-        "tool_calls": _append_tool_audit(
-            state,
-            {"tool": audit_tool, "query": query, "k": len(docs_trunc)},
-        ),
-    }
-    return out
+    return cast(AgentOrchestratorState, out)
 
 
 def build_agent_orchestrator_graph(
@@ -281,9 +149,20 @@ def build_agent_orchestrator_graph(
     max_retrieve: int,
     max_steps: int,
     max_context_chars: int,
+    grounded_finalize_mode: Literal["direct", "subagent"] = "direct",
+    writer_max_steps: int = 6,
+    writer_max_retrieve: int = 2,
+    writer_max_context_chars: int | None = None,
+    writer_max_messages: int = 40,
+    writer_session_messages: Literal["answer_only", "full"] = "answer_only",
 ) -> Any:
     """Compile the agent graph. ``retriever`` must implement ``.invoke(query) -> list[Document]``."""
     max_steps_eff = max(1, max_steps)
+    writer_mc = (
+        writer_max_context_chars
+        if writer_max_context_chars is not None
+        else max_context_chars
+    )
 
     llm_tools = llm.bind_tools(AGENT_TOOLS)
 
@@ -404,16 +283,38 @@ def build_agent_orchestrator_graph(
                 }
 
             if name == "finalize_answer":
-                gen = _grounded_generation_update(
-                    state=state,
-                    llm=llm,
-                    query=query_text,
-                    documents=accumulated,
-                    max_context_chars=max_context_chars,
-                    answer_prefix="",
-                    audit_tool="finalize_answer",
-                    tool_call_id=tid,
-                )
+                if grounded_finalize_mode == "subagent":
+                    gen = cast(
+                        AgentOrchestratorState,
+                        run_writer_subgraph_for_orchestrator(
+                            parent_messages=list(state.get("messages") or []),
+                            query=query_text,
+                            accumulated_docs=accumulated,
+                            llm=llm,
+                            retriever=retriever,
+                            max_context_chars=writer_mc,
+                            writer_max_steps=writer_max_steps,
+                            writer_max_retrieve=writer_max_retrieve,
+                            writer_max_messages=writer_max_messages,
+                            answer_prefix="",
+                            tool_call_id=tid,
+                            request_id=state.get("request_id"),
+                            session_id=state.get("session_id"),
+                            orchestrator_tool_calls=list(state.get("tool_calls") or []),
+                            session_policy=writer_session_messages,
+                        ),
+                    )
+                else:
+                    gen = _grounded_generation_update(
+                        state=state,
+                        llm=llm,
+                        query=query_text,
+                        documents=accumulated,
+                        max_context_chars=max_context_chars,
+                        answer_prefix="",
+                        audit_tool="finalize_answer",
+                        tool_call_id=tid,
+                    )
                 _log_tool(state, "finalize_answer", duration_ms=0, extra="")
                 return gen
 
@@ -434,7 +335,7 @@ def build_agent_orchestrator_graph(
                 new_docs: list[Document] = []
                 if q:
                     new_docs = retriever.invoke(q)
-                merged = _merge_documents(accumulated, new_docs)
+                merged = merge_documents(accumulated, new_docs)
                 retrieve_used += 1
                 accumulated = merged
                 summary = (
@@ -480,6 +381,27 @@ def build_agent_orchestrator_graph(
             state.get("request_id"),
             state.get("session_id"),
         )
+        if grounded_finalize_mode == "subagent":
+            return cast(
+                AgentOrchestratorState,
+                run_writer_subgraph_for_orchestrator(
+                    parent_messages=list(state.get("messages") or []),
+                    query=state.get("query", "") or "",
+                    accumulated_docs=list(state.get("accumulated_docs") or []),
+                    llm=llm,
+                    retriever=retriever,
+                    max_context_chars=writer_mc,
+                    writer_max_steps=writer_max_steps,
+                    writer_max_retrieve=writer_max_retrieve,
+                    writer_max_messages=writer_max_messages,
+                    answer_prefix="",
+                    tool_call_id=None,
+                    request_id=state.get("request_id"),
+                    session_id=state.get("session_id"),
+                    orchestrator_tool_calls=list(state.get("tool_calls") or []),
+                    session_policy=writer_session_messages,
+                ),
+            )
         return _grounded_generation_update(
             state=state,
             llm=llm,
@@ -500,6 +422,27 @@ def build_agent_orchestrator_graph(
 
     def force_finalize_node(state: AgentOrchestratorState) -> AgentOrchestratorState:
         # Invoked when ``agent_steps`` hits ``max_steps``; still grounded on ``accumulated_docs``.
+        if grounded_finalize_mode == "subagent":
+            return cast(
+                AgentOrchestratorState,
+                run_writer_subgraph_for_orchestrator(
+                    parent_messages=list(state.get("messages") or []),
+                    query=state.get("query", "") or "",
+                    accumulated_docs=list(state.get("accumulated_docs") or []),
+                    llm=llm,
+                    retriever=retriever,
+                    max_context_chars=writer_mc,
+                    writer_max_steps=writer_max_steps,
+                    writer_max_retrieve=writer_max_retrieve,
+                    writer_max_messages=writer_max_messages,
+                    answer_prefix=STEP_LIMIT_DISCLAIMER,
+                    tool_call_id=None,
+                    request_id=state.get("request_id"),
+                    session_id=state.get("session_id"),
+                    orchestrator_tool_calls=list(state.get("tool_calls") or []),
+                    session_policy=writer_session_messages,
+                ),
+            )
         return _grounded_generation_update(
             state=state,
             llm=llm,
