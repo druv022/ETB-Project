@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 from langchain_community.vectorstores import FAISS
@@ -8,15 +9,23 @@ from langchain_core.embeddings import Embeddings
 from etb_project.document_processing import ImageCaptioner
 from etb_project.document_processing.processor import (
     ChunkingConfig,
+    HierarchicalParent,
+    process_pdf_to_hierarchical_text_and_caption_docs,
     process_pdf_to_text_and_caption_docs,
 )
 from etb_project.retrieval.process import (
     append_documents_to_faiss,
     build_two_vectorstores,
-    process_pdf_to_vectorstores,
 )
 
 from .base import DualVectorStoreBackend
+from .hierarchy_store import (
+    HIERARCHY_BACKEND_SQLITE_V1,
+    HIERARCHY_SCHEMA_VERSION,
+    append_parents_and_children,
+    hierarchy_sqlite_path,
+    replace_all_hierarchy,
+)
 from .manifest import IndexManifest
 from .sparse_export import SPARSE_VERSION, export_sparse_corpus_from_vectorstores
 
@@ -41,11 +50,18 @@ def build_and_persist_index(
 ) -> tuple[FAISS, FAISS]:
     """Build dual FAISS vector stores and persist them via ``backend``."""
 
-    text_vectorstore, caption_vectorstore = process_pdf_to_vectorstores(
-        pdf_path=pdf_path,
-        output_dir=output_dir,
-        chunking_config=chunking_config,
-        image_captioner=image_captioner,
+    text_docs, caption_docs, parent_records = (
+        process_pdf_to_hierarchical_text_and_caption_docs(
+            pdf_path=pdf_path,
+            output_dir=output_dir,
+            chunking_config=chunking_config,
+            image_captioner=image_captioner,
+            asset_path_root=output_dir,
+        )
+    )
+    text_vectorstore, caption_vectorstore = build_two_vectorstores(
+        text_docs,
+        caption_docs,
     )
 
     manifest_backend = getattr(backend, "backend_name", "faiss")
@@ -57,6 +73,8 @@ def build_and_persist_index(
         embedding_model_id=DEFAULT_EMBEDDING_MODEL_ID,
         sparse_backend="bm25",
         sparse_version=SPARSE_VERSION,
+        hierarchy_backend=HIERARCHY_BACKEND_SQLITE_V1,
+        hierarchy_schema_version=HIERARCHY_SCHEMA_VERSION,
     )
 
     backend.persist(
@@ -64,6 +82,11 @@ def build_and_persist_index(
         text_vectorstore=text_vectorstore,
         caption_vectorstore=caption_vectorstore,
         manifest=manifest,
+    )
+    replace_all_hierarchy(
+        hierarchy_sqlite_path(vector_store_dir),
+        parent_records,
+        text_docs,
     )
     export_sparse_corpus_from_vectorstores(
         text_vectorstore,
@@ -79,44 +102,49 @@ def build_dual_vectorstores_from_pdfs(
     output_dir: Path,
     chunking_config: ChunkingConfig,
     image_captioner: ImageCaptioner | None,
-) -> tuple[FAISS, FAISS]:
+) -> tuple[FAISS, FAISS, list[HierarchicalParent], list]:
     """Build dual FAISS vectorstores for multiple PDFs (in-memory).
 
-    This aggregates all chunk documents across PDFs and then builds a single
-    text store and a single caption store.
+    Text chunks are **per-page** child chunks (see hierarchical retrieval plan).
+    Returns ``(text_vs, caption_vs, parent_records, child_text_documents)``.
     """
     if not pdf_paths:
         raise ValueError("pdf_paths must contain at least one PDF")
 
-    # Ensure deterministic ordering for consistent manifest and artifacts.
     pdf_paths_sorted = sorted(pdf_paths)
 
     aggregated_text_docs = []
     aggregated_caption_docs = []
+    aggregated_parents: list[HierarchicalParent] = []
 
     for pdf_path in pdf_paths_sorted:
         per_pdf_output_dir = (
             output_dir if len(pdf_paths_sorted) == 1 else output_dir / pdf_path.stem
         )
-        text_docs, caption_docs = process_pdf_to_text_and_caption_docs(
-            pdf_path=pdf_path,
-            output_dir=per_pdf_output_dir,
-            chunking_config=chunking_config,
-            image_captioner=image_captioner,
-            asset_path_root=output_dir,
+        text_docs, caption_docs, parents = (
+            process_pdf_to_hierarchical_text_and_caption_docs(
+                pdf_path=pdf_path,
+                output_dir=per_pdf_output_dir,
+                chunking_config=chunking_config,
+                image_captioner=image_captioner,
+                asset_path_root=output_dir,
+            )
         )
         aggregated_text_docs.extend(text_docs)
         aggregated_caption_docs.extend(caption_docs)
+        aggregated_parents.extend(parents)
 
-    # Build stores from the aggregated (pre-chunked) documents.
-    # We call build_two_vectorstores so the caption empty-store behavior stays
-    # consistent with the existing single-PDF pipeline.
     text_vectorstore, caption_vectorstore = build_two_vectorstores(
         aggregated_text_docs,
         aggregated_caption_docs,
     )
 
-    return text_vectorstore, caption_vectorstore
+    return (
+        text_vectorstore,
+        caption_vectorstore,
+        aggregated_parents,
+        aggregated_text_docs,
+    )
 
 
 def build_and_persist_index_for_pdfs(
@@ -133,7 +161,12 @@ def build_and_persist_index_for_pdfs(
         raise ValueError("pdf_paths must contain at least one PDF")
 
     pdf_paths_sorted = sorted(pdf_paths)
-    text_vectorstore, caption_vectorstore = build_dual_vectorstores_from_pdfs(
+    (
+        text_vectorstore,
+        caption_vectorstore,
+        parent_records,
+        child_text_docs,
+    ) = build_dual_vectorstores_from_pdfs(
         pdf_paths=pdf_paths_sorted,
         output_dir=output_dir,
         chunking_config=chunking_config,
@@ -150,6 +183,8 @@ def build_and_persist_index_for_pdfs(
         embedding_model_id=DEFAULT_EMBEDDING_MODEL_ID,
         sparse_backend="bm25",
         sparse_version=SPARSE_VERSION,
+        hierarchy_backend=HIERARCHY_BACKEND_SQLITE_V1,
+        hierarchy_schema_version=HIERARCHY_SCHEMA_VERSION,
     )
 
     backend.persist(
@@ -157,6 +192,11 @@ def build_and_persist_index_for_pdfs(
         text_vectorstore=text_vectorstore,
         caption_vectorstore=caption_vectorstore,
         manifest=manifest,
+    )
+    replace_all_hierarchy(
+        hierarchy_sqlite_path(vector_store_dir),
+        parent_records,
+        child_text_docs,
     )
     export_sparse_corpus_from_vectorstores(
         text_vectorstore,
@@ -203,8 +243,6 @@ def append_to_and_persist_index_for_pdfs(
             backend=backend,
         )
 
-    # Load existing stores and validate chunking / embedding configuration so
-    # we don't silently mix incompatible indices.
     existing_text_vectorstore, existing_caption_vectorstore = backend.load(
         vector_store_dir, embeddings=embeddings
     )
@@ -222,21 +260,56 @@ def append_to_and_persist_index_for_pdfs(
             "Pass --reset-vdb to rebuild from scratch."
         )
 
+    use_hierarchy = (
+        existing_manifest.hierarchy_schema_version == HIERARCHY_SCHEMA_VERSION
+        and existing_manifest.hierarchy_backend == HIERARCHY_BACKEND_SQLITE_V1
+    )
+    if use_hierarchy:
+        hier_path = hierarchy_sqlite_path(vector_store_dir)
+        if not hier_path.is_file():
+            raise ValueError(
+                "Manifest declares hierarchical index but hierarchy.sqlite is missing. "
+                "Pass --reset-vdb to rebuild from scratch."
+            )
+
+    batch_parents: list[HierarchicalParent] = []
+    batch_child_docs: list = []
+
     for pdf_path in pdf_paths_sorted:
         per_pdf_output_dir = (
             output_dir if len(pdf_paths_sorted) == 1 else output_dir / pdf_path.stem
         )
-        text_docs, caption_docs = process_pdf_to_text_and_caption_docs(
-            pdf_path=pdf_path,
-            output_dir=per_pdf_output_dir,
-            chunking_config=chunking_config,
-            image_captioner=image_captioner,
-            asset_path_root=output_dir,
-        )
+        if use_hierarchy:
+            text_docs, caption_docs, parents = (
+                process_pdf_to_hierarchical_text_and_caption_docs(
+                    pdf_path=pdf_path,
+                    output_dir=per_pdf_output_dir,
+                    chunking_config=chunking_config,
+                    image_captioner=image_captioner,
+                    asset_path_root=output_dir,
+                )
+            )
+            batch_parents.extend(parents)
+            batch_child_docs.extend(text_docs)
+        else:
+            text_docs, caption_docs = process_pdf_to_text_and_caption_docs(
+                pdf_path=pdf_path,
+                output_dir=per_pdf_output_dir,
+                chunking_config=chunking_config,
+                image_captioner=image_captioner,
+                asset_path_root=output_dir,
+            )
         if text_docs:
             append_documents_to_faiss(existing_text_vectorstore, text_docs)
         if caption_docs:
             append_documents_to_faiss(existing_caption_vectorstore, caption_docs)
+
+    if use_hierarchy and batch_parents:
+        conn = sqlite3.connect(str(hierarchy_sqlite_path(vector_store_dir)))
+        try:
+            append_parents_and_children(conn, batch_parents, batch_child_docs)
+        finally:
+            conn.close()
 
     prev_backend = getattr(existing_manifest, "sparse_backend", None)
     sparse_backend = (
@@ -256,6 +329,8 @@ def append_to_and_persist_index_for_pdfs(
         embedding_model_id=existing_manifest.embedding_model_id,
         sparse_backend=sparse_backend,
         sparse_version=sparse_version,
+        hierarchy_backend=existing_manifest.hierarchy_backend,
+        hierarchy_schema_version=existing_manifest.hierarchy_schema_version,
     )
     backend.persist(
         vector_store_dir,

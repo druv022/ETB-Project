@@ -16,8 +16,11 @@ class DualRetriever:
     caption_retriever: Any
     k_total: int = 10
 
-    def _doc_key(self, doc: Document) -> tuple[str, Any, Any, Any]:
+    def _doc_key(self, doc: Document) -> tuple[Any, ...]:
         metadata = doc.metadata or {}
+        cid = metadata.get("child_id")
+        if cid is not None:
+            return (str(cid),)
         return (
             doc.page_content,
             metadata.get("source"),
@@ -31,7 +34,7 @@ class DualRetriever:
         caption_docs = self.caption_retriever.invoke(query)
 
         merged: list[Document] = []
-        seen: set[tuple[str, Any, Any, Any]] = set()
+        seen: set[tuple[Any, ...]] = set()
         for doc in [*text_docs, *caption_docs]:
             key = self._doc_key(doc)
             if key in seen:

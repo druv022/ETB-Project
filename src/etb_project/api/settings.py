@@ -44,6 +44,13 @@ def _env_hyde_mode(default: str = "off") -> str:
     return default
 
 
+def _env_hier_expand_default() -> bool:
+    raw = os.environ.get("ETB_HIER_EXPAND_DEFAULT")
+    if raw is None or raw.strip() == "":
+        return True
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
 @dataclass(frozen=True)
 class RetrieverAPISettings:
     """Configuration for ``uvicorn`` and route limits."""
@@ -70,6 +77,9 @@ class RetrieverAPISettings:
     default_reranker: str
     default_hyde_mode: str
     hyde_max_tokens: int
+    hier_expand_default: bool
+    parent_context_chars: int
+    max_hierarchy_parents: int
 
 
 def load_api_settings() -> RetrieverAPISettings:
@@ -123,4 +133,7 @@ def load_api_settings() -> RetrieverAPISettings:
         default_reranker=_env_reranker("off"),
         default_hyde_mode=_env_hyde_mode("off"),
         hyde_max_tokens=_env_int("ETB_HYDE_MAX_TOKENS", 384),
+        hier_expand_default=_env_hier_expand_default(),
+        parent_context_chars=_env_int("ETB_PARENT_CONTEXT_CHARS", 12_000),
+        max_hierarchy_parents=_env_int("ETB_MAX_PARENTS", 20),
     )

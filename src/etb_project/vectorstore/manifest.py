@@ -19,6 +19,8 @@ class IndexManifest:
     created_at: str
     sparse_backend: str | None = None
     sparse_version: str | None = None
+    hierarchy_backend: str | None = None
+    hierarchy_schema_version: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -37,6 +39,8 @@ class IndexManifest:
         embedding_model_id: str,
         sparse_backend: str | None = None,
         sparse_version: str | None = None,
+        hierarchy_backend: str | None = None,
+        hierarchy_schema_version: int | None = None,
     ) -> IndexManifest:
         return IndexManifest(
             backend=backend,
@@ -47,6 +51,8 @@ class IndexManifest:
             created_at=IndexManifest._now_iso(),
             sparse_backend=sparse_backend,
             sparse_version=sparse_version,
+            hierarchy_backend=hierarchy_backend,
+            hierarchy_schema_version=hierarchy_schema_version,
         )
 
     def save(self, path: Path) -> None:
@@ -59,6 +65,8 @@ class IndexManifest:
         with path.open("r", encoding="utf-8") as f:
             data = json.load(f)
         # Be resilient to missing fields if older manifests exist.
+        hb = data.get("hierarchy_backend")
+        hsv = data.get("hierarchy_schema_version")
         return IndexManifest(
             backend=str(data["backend"]),
             pdf_path=str(data["pdf_path"]),
@@ -72,4 +80,6 @@ class IndexManifest:
             sparse_version=(
                 str(data["sparse_version"]) if data.get("sparse_version") else None
             ),
+            hierarchy_backend=str(hb) if hb else None,
+            hierarchy_schema_version=int(hsv) if hsv is not None else None,
         )

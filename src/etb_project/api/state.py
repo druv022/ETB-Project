@@ -18,6 +18,10 @@ from etb_project.retrieval.exceptions import HybridSparseUnavailableError
 from etb_project.retrieval.pipeline import run_retrieval
 from etb_project.retrieval.sparse_retriever import Bm25DualSparseRetriever
 from etb_project.vectorstore.faiss_backend import FaissDualVectorStoreBackend
+from etb_project.vectorstore.hierarchy_store import (
+    hierarchy_index_usable,
+    hierarchy_sqlite_path,
+)
 from etb_project.vectorstore.manifest import IndexManifest
 
 logger = logging.getLogger(__name__)
@@ -151,6 +155,14 @@ class RetrieverServiceState:
             if strategy == "hybrid":
                 bm25 = self._ensure_bm25()
 
+            manifest = IndexManifest.load(self._vector_store_root / "manifest.json")
+            hier_sqlite = hierarchy_sqlite_path(self._vector_store_root)
+            hierarchy_sqlite_arg = (
+                hier_sqlite
+                if hierarchy_index_usable(manifest, self._vector_store_root)
+                else None
+            )
+
             return run_retrieval(
                 request=request,
                 k=k,
@@ -161,6 +173,7 @@ class RetrieverServiceState:
                 embeddings=self._embeddings,
                 settings=settings,
                 request_id=request_id,
+                hierarchy_sqlite_path=hierarchy_sqlite_arg,
             )
 
     def reload_after_index(self) -> None:

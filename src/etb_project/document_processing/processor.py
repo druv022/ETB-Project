@@ -25,6 +25,18 @@ from etb_project.document_processing import (
 LengthFunction = Callable[[str], int]
 
 
+@dataclass(frozen=True)
+class HierarchicalParent:
+    """One PDF page row for ``hierarchy.sqlite`` (parent table)."""
+
+    parent_id: str
+    source: str
+    page_start: int
+    page_end: int
+    full_text: str
+    metadata: dict[str, Any]
+
+
 @dataclass
 class ChunkingConfig:
     """Configuration for text chunking.
@@ -175,6 +187,24 @@ def process_pdf_to_text_and_caption_docs(
     )
 
 
+def process_pdf_to_hierarchical_text_and_caption_docs(
+    pdf_path: str | Path,
+    output_dir: str | Path,
+    chunking_config: ChunkingConfig | None = None,
+    image_captioner: ImageCaptioner | None = None,
+    *,
+    asset_path_root: Path | None = None,
+) -> tuple[list[Document], list[Document], list[HierarchicalParent]]:
+    """Like :func:`process_pdf_to_text_and_caption_docs` but chunk **per page** with ``child_id`` / ``parent_id``."""
+    return _process_pdf_to_hierarchical_text_and_caption_docs(
+        pdf_path=pdf_path,
+        output_dir=output_dir,
+        chunking_config=chunking_config,
+        image_captioner=image_captioner,
+        asset_path_root=asset_path_root,
+    )
+
+
 def _process_pdf_to_text_and_caption_docs(
     pdf_path: str | Path,
     output_dir: str | Path,
@@ -279,4 +309,130 @@ def _process_pdf_to_text_and_caption_docs(
     return list(chunk_docs), caption_docs
 
 
-__all__ = ["ChunkingConfig", "process_pdf", "process_pdf_to_text_and_caption_docs"]
+def _process_pdf_to_hierarchical_text_and_caption_docs(
+    pdf_path: str | Path,
+    output_dir: str | Path,
+    chunking_config: ChunkingConfig | None,
+    image_captioner: ImageCaptioner | None,
+    *,
+    asset_path_root: Path | None = None,
+) -> tuple[list[Document], list[Document], list[HierarchicalParent]]:
+    pdf_path_obj = Path(pdf_path)
+    output_root = Path(output_dir)
+    _ensure_output_root(output_root)
+    asset_root = (
+        Path(asset_path_root).resolve()
+        if asset_path_root is not None
+        else output_root.resolve()
+    )
+    normalized_source = pdf_path_obj.resolve().as_posix()
+
+    page_docs = extract_page_documents(pdf_path_obj)
+    images_by_page = extract_images(pdf_path_obj, output_root)
+
+    captions_by_page: dict[int, list[str | None]] = {}
+    caption_docs: list[Document] = []
+    if image_captioner is not None:
+        caption_source_label = "vlm"
+
+        for page_index, images in images_by_page.items():
+            page_captions: list[str | None] = []
+            for info in images:
+                caption = image_captioner.caption_image(info.path)
+                page_captions.append(caption)
+            if page_captions:
+                captions_by_page[page_index] = page_captions
+
+        total_pages = len(page_docs)
+        for page_index, images in images_by_page.items():
+            page_captions = captions_by_page.get(page_index, [])
+            for idx, info in enumerate(images):
+                caption_value = page_captions[idx] if idx < len(page_captions) else None
+                if not caption_value:
+                    continue
+                asset_path = _compute_asset_path(info.path, asset_root)
+                caption_docs.append(
+                    Document(
+                        page_content=f"Image caption: {caption_value}",
+                        metadata={
+                            "source": str(pdf_path_obj),
+                            "page": page_index + 1,
+                            "total_pages": total_pages,
+                            "image_index": info.image_index,
+                            "xref": info.xref,
+                            "path": str(info.path),
+                            "asset_path": asset_path,
+                            "ext": info.ext,
+                            "caption_source": caption_source_label,
+                        },
+                    )
+                )
+
+        for page_index, doc in enumerate(page_docs):
+            image_infos = images_by_page.get(page_index, [])
+            page_captions = captions_by_page.get(page_index, [])
+            if not image_infos or not page_captions:
+                continue
+            image_caption_records: list[dict[str, Any]] = []
+            for idx, info in enumerate(image_infos):
+                caption_value = page_captions[idx] if idx < len(page_captions) else None
+                if caption_value:
+                    asset_path = _compute_asset_path(info.path, asset_root)
+                    image_caption_records.append(
+                        {
+                            "path": str(info.path),
+                            "asset_path": asset_path,
+                            "caption": caption_value,
+                        }
+                    )
+            if image_caption_records:
+                doc.metadata["image_captions"] = image_caption_records
+
+    splitter = _build_text_splitter(chunking_config or ChunkingConfig())
+    child_docs: list[Document] = []
+    parent_records: list[HierarchicalParent] = []
+
+    for page_index, page_doc in enumerate(page_docs):
+        page_num = page_index + 1
+        parent_id = f"{normalized_source}::page::{page_num}"
+        full_text = page_doc.page_content or ""
+        parent_records.append(
+            HierarchicalParent(
+                parent_id=parent_id,
+                source=normalized_source,
+                page_start=page_num,
+                page_end=page_num,
+                full_text=full_text,
+                metadata=dict(page_doc.metadata or {}),
+            )
+        )
+        page_chunks = splitter.split_documents([page_doc])
+        for ci, ch in enumerate(page_chunks):
+            child_id = f"{normalized_source}::p{page_num}::c{ci}"
+            meta = dict(ch.metadata or {})
+            meta["parent_id"] = parent_id
+            meta["child_id"] = child_id
+            meta["chunk_index"] = ci
+            child_docs.append(Document(page_content=ch.page_content, metadata=meta))
+
+    pages_json = output_root / "pages.json"
+    chunks_jsonl = output_root / "chunks.jsonl"
+    _serialize_pages_to_json(
+        pages_json,
+        page_docs,
+        images_by_page,
+        captions_by_page or None,
+        asset_path_root=asset_root,
+    )
+    _serialize_documents_to_jsonl(chunks_jsonl, child_docs)
+
+    return child_docs, caption_docs, parent_records
+
+
+__all__ = [
+    "ChunkingConfig",
+    "HierarchicalParent",
+    "process_pdf",
+    "process_pdf_to_hierarchical_text_and_caption_docs",
+    "process_pdf_to_text_and_caption_docs",
+]

@@ -29,6 +29,9 @@ def _fake_settings(**overrides: object) -> SimpleNamespace:
         "default_reranker": "off",
         "default_hyde_mode": "off",
         "hyde_max_tokens": 256,
+        "hier_expand_default": True,
+        "parent_context_chars": 12_000,
+        "max_hierarchy_parents": 20,
     }
     base.update(overrides)
     return SimpleNamespace(**base)

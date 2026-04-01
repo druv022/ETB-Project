@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from pathlib import Path
 from typing import Literal
 
 import numpy as np
@@ -15,6 +16,7 @@ from etb_project.api.schemas import RetrieveRequest
 from etb_project.api.settings import RetrieverAPISettings
 from etb_project.retrieval.hyde import generate_hypothetical_passage, resolve_hyde_mode
 from etb_project.retrieval.sparse_retriever import Bm25DualSparseRetriever
+from etb_project.vectorstore.hierarchy_store import expand_child_hits_to_parents
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,7 @@ HEAD_ORDER = (
     "dense_caption_h",
     "bm25_text",
     "bm25_caption",
+    "hier_child",
 )
 
 
@@ -130,6 +133,18 @@ def effective_k_fetch(k: int, settings: RetrieverAPISettings) -> int:
     return min(base, settings.k_fetch_hard_cap, settings.max_retrieve_k)
 
 
+def _resolve_expand(
+    request: RetrieveRequest,
+    settings: RetrieverAPISettings,
+    hierarchy_active: bool,
+) -> bool:
+    if request.expand is not None:
+        return bool(request.expand)
+    if not hierarchy_active:
+        return False
+    return bool(settings.hier_expand_default)
+
+
 def _reranker_mode(
     request: RetrieveRequest,
     settings: RetrieverAPISettings,
@@ -163,6 +178,7 @@ def run_retrieval(
     embeddings: Embeddings,
     settings: RetrieverAPISettings,
     request_id: str | None = None,
+    hierarchy_sqlite_path: Path | None = None,
 ) -> list[Document]:
     """Run dense (+ optional BM25) heads, RRF, rerank, return top ``k`` documents."""
     k_fetch = effective_k_fetch(k, settings)
@@ -223,6 +239,13 @@ def run_retrieval(
         if bm25.has_caption_index:
             heads.append(("bm25_caption", bm25.search_captions(q, k_fetch)))
 
+    hierarchy_active = hierarchy_sqlite_path is not None
+    if hierarchy_active:
+        hier_retriever = text_vs.as_retriever(search_kwargs=text_r_kw)
+        heads.append(
+            ("hier_child", _tag_head(list(hier_retriever.invoke(q)), "hier_child")),
+        )
+
     k_rrf = settings.rrf_k
     cap = settings.ensemble_cap
     merged = ensemble_rrf(heads, k_rrf=k_rrf, cap=cap)
@@ -243,4 +266,13 @@ def run_retrieval(
     except Exception as exc:
         logger.warning("Rerank failed, using ensemble order: %s", exc)
 
-    return merged[:k]
+    top = merged[:k]
+    expand = _resolve_expand(request, settings, hierarchy_active)
+    if expand and hierarchy_sqlite_path is not None and hierarchy_sqlite_path.is_file():
+        top = expand_child_hits_to_parents(
+            top,
+            hierarchy_sqlite_path,
+            max_parents=settings.max_hierarchy_parents,
+            max_total_chars=settings.parent_context_chars,
+        )
+    return top

@@ -24,12 +24,14 @@ class RemoteRetriever:
         api_key: str | None = None,
         strategy: str | None = None,
         hyde_mode: str | None = None,
+        expand: bool | None = None,
     ) -> None:
         self._base = base_url.rstrip("/")
         self._k = k
         self._timeout = timeout_s
         self._strategy = strategy
         self._hyde_mode = hyde_mode
+        self._expand = expand
         headers: dict[str, str] = {}
         key = api_key or os.environ.get("RETRIEVER_API_KEY")
         if key:
@@ -44,6 +46,8 @@ class RemoteRetriever:
             payload["strategy"] = self._strategy
         if self._hyde_mode in ("off", "replace", "fuse"):
             payload["hyde_mode"] = self._hyde_mode
+        if self._expand is not None:
+            payload["expand"] = self._expand
         try:
             response = self._client.post(url, json=payload)
         except httpx.RequestError as exc:

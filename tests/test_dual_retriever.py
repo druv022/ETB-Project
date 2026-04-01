@@ -96,6 +96,24 @@ def test_invoke_handles_empty_retriever_results() -> None:
     assert result == []
 
 
+def test_invoke_deduplicates_by_child_id_not_only_page_content() -> None:
+    d1 = Document(
+        page_content="same text",
+        metadata={"source": "f.pdf", "page": 1, "child_id": "a"},
+    )
+    d2 = Document(
+        page_content="same text",
+        metadata={"source": "f.pdf", "page": 1, "child_id": "b"},
+    )
+    retriever = DualRetriever(
+        text_retriever=_StubRetriever([d1]),
+        caption_retriever=_StubRetriever([d2]),
+        k_total=10,
+    )
+    result = retriever.invoke("q")
+    assert len(result) == 2
+
+
 def test_invoke_respects_k_total_limit() -> None:
     text_docs = [
         Document(page_content="text-1", metadata={"source": "t"}),

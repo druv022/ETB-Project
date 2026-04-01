@@ -12,7 +12,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from etb_project.document_processing import ImageCaptioner
 from etb_project.document_processing.processor import (
     ChunkingConfig,
-    process_pdf_to_text_and_caption_docs,
+    process_pdf_to_hierarchical_text_and_caption_docs,
 )
 from etb_project.models import _normalize_embed_documents_for_faiss
 from etb_project.models import get_ollama_embedding_model as get_embedding_model
@@ -155,12 +155,14 @@ def process_pdf_to_vectorstores(
     image_captioner: ImageCaptioner | None = None,
 ) -> tuple[FAISS, FAISS]:
     """End-to-end dual-index pipeline for standalone processing."""
-    text_docs, caption_docs = process_pdf_to_text_and_caption_docs(
-        pdf_path=pdf_path,
-        output_dir=output_dir,
-        chunking_config=chunking_config,
-        image_captioner=image_captioner,
-        asset_path_root=Path(output_dir),
+    text_docs, caption_docs, _parents = (
+        process_pdf_to_hierarchical_text_and_caption_docs(
+            pdf_path=pdf_path,
+            output_dir=output_dir,
+            chunking_config=chunking_config,
+            image_captioner=image_captioner,
+            asset_path_root=Path(output_dir),
+        )
     )
     return build_two_vectorstores(text_docs, caption_docs)
 

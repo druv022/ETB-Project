@@ -29,6 +29,10 @@ class RetrieveRequest(BaseModel):
         default=None,
         description="HyDE dense heads; omit to use ETB_HYDE_MODE (default off).",
     )
+    expand: bool | None = Field(
+        default=None,
+        description="Hierarchical parent expansion; omit to use ETB_HIER_EXPAND_DEFAULT when hierarchy index exists.",
+    )
 
 
 class ChunkOut(BaseModel):
