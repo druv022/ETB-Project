@@ -119,8 +119,24 @@ This file logs all prompts given to the AI agent for this project.
 
 - **2026-03-31**: `Fix image rendering after Docker deploy` (Context: implement plan — `asset_path` relative to top-level `ETB_DOCUMENT_OUTPUT_DIR` when indexing multiple PDFs; Docker `ETB_DOCUMENT_OUTPUT_DIR`/`ETB_UPLOAD_DIR`; UI derives asset paths from stored absolute paths, forwards bearer token for `/v1/assets`, tests and docs.)
 
-- **2026-03-31**: `use conda etb environment` (Context: document the **`ETB`** conda env in README; run pytest with `conda run -n ETB`; fix `_serialize_metadata` to use `_json_safe` so nested `image_captions` stay JSON-shaped for the retriever API test.)
+- **2026-03-31**: `use conda etb environment` / `use conda etb env` (Context: README **Conda** section standardizes on the **`etb`** env (`conda activate etb`, `conda run -n etb pytest`, Streamlit, uvicorn); **`ETB`** noted as an alternate env name if used locally.)
 
 - **2026-03-31**: `The source name is confusing: 1. f411370fd13b44fbb0c18db63207e351_pdf_with_image.pdf • p.1/1 — Provide only the necessary information. The first part is unnecessary for the user.` (Context: add `display_name_for_source_file` in `ui/asset_paths.py` to strip retriever upload prefix `{uuid.hex}_`; use in Streamlit `_format_source_header`; tests in `test_ui_asset_paths.py`.)
 
 - **2026-03-31**: `Orion pre-retrieval clarification (conditional LangGraph) — implement the plan; use conda etb env.` (Context: add `orchestrator/prompts.py`, `orion_parse.py`, `session_messages.py`; extend `graph_rag.py` with `orion_gate` and conditional edges; orchestrator chat `phase` + message serialization; `ETB_ORION_CLARIFY`; CLI/studio `enable_orion_gate=False`; tests and docs. Run `conda run -n etb pytest`.)
+
+- **2026-03-31**: `Complete rest of the todo.` (Context: Streamlit access-control plan — `app.py` login/register + admin shell; `orion_chat.py` / `orion_theme.py`; `ui/admin/*` health/settings/logs/documents; orchestrator Bearer on chat; tests `test_user_auth_store`, `test_orchestrator_admin_auth`, `test_retriever_admin_routes`; README verification + `.streamlit/secrets.toml.example`; Docker UI `etb_data` + `ETB_USERS_DB_PATH` + `RETRIEVER_BASE_URL`.)
+
+- **2026-03-31**: `create a good looking user registration page. The current pages is not user friendly or centered to be specific.` (Context: `etb_project/ui/auth_page.py` — centered column layout, Outfit/DM Sans, pill tabs, bordered card, forms; `app.py` calls `render_auth_screen` and drops inlined auth; README Streamlit blurb updated.)
+
+- **2026-03-31**: `verify the UI in the cursor browser.` (Context: Cursor browser at `http://127.0.0.1:8501` — confirmed Orion title, Sign in / Create account tabs, forms and placeholders; raw CSS was visible without `<style>` wrapper — fixed `auth_page.py` to inject `<style>...</style>`.)
+
+- **2026-03-31**: `Adapt the fields such that it appears same in any window setting or adjustment.` (Context: `auth_page.py` — drop proportional `st.columns`; CSS `block-container` fixed `max-width: 28rem` with `min(28rem, calc(100vw - …))`, safe-area padding, full-width text inputs and forms; flex column centers content horizontally.)
+
+- **2026-03-31**: `Increase the Size of Orion as Logo of the page` (Context: `auth_page.py` — larger `clamp()` for `.auth-brand-title`, line-height and spacing; markup `<h1 class="auth-brand-title">`.)
+
+- **2026-03-31**: `fix the error` (pre-commit mypy failures) — Removed unused `type: ignore` in `auth_credentials.py`; added `types-requests` to `requirements.txt` and `pyproject.toml` dev; renamed duplicate `details` in `orion_chat.py`; fixed `require_admin_bearer_token` return type to `Callable[..., Coroutine[Any, Any, None]]` in `admin_bearer.py`.
+
+- **2026-03-31**: `use conda etb env` — Verified `conda run -n etb python -m mypy src/etb_project` passes; README Conda section documents `conda run -n etb pre-commit run --all-files`.
+
+- **2026-03-31**: `fix` (pre-commit mypy on `auth_credentials` / `orion_chat` / `admin_bearer`) — Same code fixes as before were only in the working tree; pre-commit stashes unstaged changes and checks the **index**, so failures persisted until `git add` on those files plus `requirements.txt` / `pyproject.toml` (types-requests). `conda run -n etb pre-commit run mypy --all-files` passes after staging.

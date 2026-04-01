@@ -115,14 +115,19 @@ services:
     depends_on:
       orchestrator:
         condition: service_started
-    volumes:
-      - .:/app
-      - /app/.venv
     environment:
       - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app/src
       - ORCHESTRATOR_BASE_URL=http://orchestrator:8001
+      - RETRIEVER_BASE_URL=http://retriever:8000
+      # Persist registered users on the shared data volume (override in .env if needed).
+      - ETB_USERS_DB_PATH=/app/data/users.sqlite
     env_file:
       - .env
+    volumes:
+      - etb_data:/app/data
+      - .:/app
+      - /app/.venv
     ports:
       - "8501:8501"
     command: ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
