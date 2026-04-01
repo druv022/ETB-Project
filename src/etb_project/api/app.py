@@ -390,8 +390,9 @@ def create_app() -> FastAPI:
         k = body.k if body.k is not None else settings.default_retriever_k
         k = min(k, settings.max_retrieve_k)
 
+        req_id = request.headers.get("X-Request-ID")
         try:
-            docs = state.retrieve(body, k, settings)
+            docs = state.retrieve(body, k, settings, request_id=req_id)
         except FileNotFoundError:
             raise RetrieverAPIError(
                 503,

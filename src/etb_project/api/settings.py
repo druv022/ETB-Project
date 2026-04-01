@@ -37,6 +37,13 @@ def _env_reranker(default: str = "off") -> str:
     return default
 
 
+def _env_hyde_mode(default: str = "off") -> str:
+    raw = os.environ.get("ETB_HYDE_MODE", default).strip().lower()
+    if raw in ("off", "replace", "fuse"):
+        return raw
+    return default
+
+
 @dataclass(frozen=True)
 class RetrieverAPISettings:
     """Configuration for ``uvicorn`` and route limits."""
@@ -61,6 +68,8 @@ class RetrieverAPISettings:
     rrf_k: int
     ensemble_cap: int
     default_reranker: str
+    default_hyde_mode: str
+    hyde_max_tokens: int
 
 
 def load_api_settings() -> RetrieverAPISettings:
@@ -112,4 +121,6 @@ def load_api_settings() -> RetrieverAPISettings:
         rrf_k=_env_int("ETB_RRF_K", 60),
         ensemble_cap=_env_int("ETB_ENSEMBLE_CAP", 80),
         default_reranker=_env_reranker("off"),
+        default_hyde_mode=_env_hyde_mode("off"),
+        hyde_max_tokens=_env_int("ETB_HYDE_MAX_TOKENS", 384),
     )

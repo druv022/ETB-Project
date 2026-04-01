@@ -41,6 +41,14 @@ services:
       # ollama-python Client reads OLLAMA_HOST; LangChain also accepts base_url from these.
       - OLLAMA_HOST=http://ollama:11434
       - OLLAMA_BASE_URL=http://ollama:11434
+      # HyDE chat LLM (same variables as orchestrator; see src/etb_project/models.py)
+      - ETB_LLM_PROVIDER=${ETB_LLM_PROVIDER:-openai_compat}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://openrouter.ai/api/v1}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-${OPENROUTER_API_KEY:-}}
+      - OPENAI_MODEL=${OPENAI_MODEL:-stepfun/step-3.5-flash}
+      - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0}
+      - OLLAMA_CHAT_MODEL=${OLLAMA_CHAT_MODEL:-qwen3.5:9b}
+      - OLLAMA_TEMPERATURE=${OLLAMA_TEMPERATURE:-0}
     env_file:
       - .env
     ports:

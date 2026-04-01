@@ -13,6 +13,7 @@ from langchain_core.embeddings import Embeddings
 
 from etb_project.api.schemas import RetrieveRequest
 from etb_project.api.settings import RetrieverAPISettings
+from etb_project.retrieval.hyde import generate_hypothetical_passage, resolve_hyde_mode
 from etb_project.retrieval.sparse_retriever import Bm25DualSparseRetriever
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,8 @@ RerankerMode = Literal["off", "cosine", "cross_encoder", "llm"]
 HEAD_ORDER = (
     "dense_text_q",
     "dense_caption_q",
+    "dense_text_h",
+    "dense_caption_h",
     "bm25_text",
     "bm25_caption",
 )
@@ -139,6 +142,16 @@ def _reranker_mode(
     return "off"
 
 
+def _tag_head(docs: list[Document], head_id: str) -> list[Document]:
+    """Attach ``ensemble_head`` for tracing (stripped before HTTP response)."""
+    out: list[Document] = []
+    for d in docs:
+        meta = dict(d.metadata or {})
+        meta["ensemble_head"] = head_id
+        out.append(Document(page_content=d.page_content, metadata=meta))
+    return out
+
+
 def run_retrieval(
     *,
     request: RetrieveRequest,
@@ -149,20 +162,61 @@ def run_retrieval(
     bm25: Bm25DualSparseRetriever | None,
     embeddings: Embeddings,
     settings: RetrieverAPISettings,
+    request_id: str | None = None,
 ) -> list[Document]:
     """Run dense (+ optional BM25) heads, RRF, rerank, return top ``k`` documents."""
     k_fetch = effective_k_fetch(k, settings)
     q = request.query
 
-    text_retriever = text_vs.as_retriever(search_kwargs={"k": k_fetch})
-    caption_retriever = caption_vs.as_retriever(search_kwargs={"k": k_fetch})
-    dense_text = list(text_retriever.invoke(q))
-    dense_caption = list(caption_retriever.invoke(q))
+    hyde_mode = resolve_hyde_mode(request, settings)
+    H: str | None = None
+    hyde_usable = False
+    if hyde_mode in ("replace", "fuse"):
+        H = generate_hypothetical_passage(q, settings, request_id=request_id)
+        hyde_usable = bool(H and H.strip())
+        if not hyde_usable:
+            logger.warning(
+                "HyDE: skipping dense HyDE heads (no passage); using query dense only%s",
+                f" request_id={request_id}" if request_id else "",
+            )
 
-    heads: list[tuple[str, list[Document]]] = [
-        ("dense_text_q", dense_text),
-        ("dense_caption_q", dense_caption),
-    ]
+    include_query_dense = (hyde_mode != "replace") or (not hyde_usable)
+    include_hyde_dense = hyde_usable and hyde_mode in ("replace", "fuse")
+
+    heads: list[tuple[str, list[Document]]] = []
+
+    text_r_kw = {"k": k_fetch}
+    if include_query_dense:
+        text_retriever_q = text_vs.as_retriever(search_kwargs=text_r_kw)
+        caption_retriever_q = caption_vs.as_retriever(search_kwargs=text_r_kw)
+        heads.append(
+            (
+                "dense_text_q",
+                _tag_head(list(text_retriever_q.invoke(q)), "dense_text_q"),
+            )
+        )
+        heads.append(
+            (
+                "dense_caption_q",
+                _tag_head(list(caption_retriever_q.invoke(q)), "dense_caption_q"),
+            )
+        )
+
+    if include_hyde_dense and H is not None:
+        text_retriever_h = text_vs.as_retriever(search_kwargs=text_r_kw)
+        caption_retriever_h = caption_vs.as_retriever(search_kwargs=text_r_kw)
+        heads.append(
+            (
+                "dense_text_h",
+                _tag_head(list(text_retriever_h.invoke(H)), "dense_text_h"),
+            )
+        )
+        heads.append(
+            (
+                "dense_caption_h",
+                _tag_head(list(caption_retriever_h.invoke(H)), "dense_caption_h"),
+            )
+        )
 
     if strategy == "hybrid" and bm25 is not None:
         heads.append(("bm25_text", bm25.search_text(q, k_fetch)))

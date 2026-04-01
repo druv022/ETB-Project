@@ -25,6 +25,10 @@ class RetrieveRequest(BaseModel):
         default=None,
         description="Reranker backend; omit to use ETB_RERANKER.",
     )
+    hyde_mode: Literal["off", "replace", "fuse"] | None = Field(
+        default=None,
+        description="HyDE dense heads; omit to use ETB_HYDE_MODE (default off).",
+    )
 
 
 class ChunkOut(BaseModel):

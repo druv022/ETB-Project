@@ -35,10 +35,16 @@ def _json_safe(value: Any) -> Any:
     return str(value)
 
 
+# Internal tracing keys — omit from API JSON (see retrieval-hyde plan).
+_METADATA_STRIP_KEYS = frozenset({"ensemble_head"})
+
+
 def _serialize_metadata(meta: dict[str, Any] | None) -> dict[str, Any]:
     if not meta:
         return {}
-    return {str(k): _json_safe(v) for k, v in meta.items()}
+    return {
+        str(k): _json_safe(v) for k, v in meta.items() if k not in _METADATA_STRIP_KEYS
+    }
 
 
 class RetrieverServiceState:
@@ -127,6 +133,8 @@ class RetrieverServiceState:
         request: RetrieveRequest,
         k: int,
         settings: RetrieverAPISettings,
+        *,
+        request_id: str | None = None,
     ) -> list[Document]:
         """Return top-``k`` documents for the retrieval request."""
         with self._lock:
@@ -152,6 +160,7 @@ class RetrieverServiceState:
                 bm25=bm25,
                 embeddings=self._embeddings,
                 settings=settings,
+                request_id=request_id,
             )
 
     def reload_after_index(self) -> None:
