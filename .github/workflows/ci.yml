@@ -92,10 +92,54 @@ jobs:
       - name: Run Safety check
         run: safety check --file requirements.txt
 
+  docker-smoke:
+    name: Docker smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Compose file
+        run: docker compose config
+
+      - name: Build image
+        run: docker build -t etb:ci .
+
+      - name: Run container and probe /v1/health
+        run: |
+          set -e
+          docker run -d --name etb_ci -p 8000:8000 etb:ci
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/v1/health; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "--- docker logs ---"
+          docker logs etb_ci
+          exit 1
+
+      - name: Cleanup container
+        if: always()
+        run: |
+          docker stop etb_ci 2>/dev/null || true
+          docker rm etb_ci 2>/dev/null || true
+
+  docker-build-windows:
+    name: Docker build (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Docker version
+        run: docker version
+
+      - name: Build Linux image
+        run: docker build -t etb:ci-win .
+
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    needs: [lint, test, docker-smoke, docker-build-windows]
     steps:
       - uses: actions/checkout@v4
 

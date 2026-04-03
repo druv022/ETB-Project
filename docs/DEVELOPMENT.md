@@ -108,8 +108,33 @@ pre-commit run --all-files
 
 ## Docker
 
+### CI (GitHub Actions)
+
+On pull requests and pushes to `main` / `develop`, CI runs:
+
+- **Ubuntu:** `docker compose config`, `docker build`, then a container smoke test against `GET /v1/health` on port 8000 (retriever image).
+- **Windows:** `docker build` for the same Linux `Dockerfile` to catch host-specific path/context issues.
+
+The Python **sdist/wheel** build job waits for both Docker jobs to succeed.
+
+### Local parity (smoke test)
+
+From the repo root (same image CI builds for the retriever):
+
 ```bash
-# Build image
+docker build -t etb:ci .
+docker run --rm -d --name etb_ci -p 8000:8000 etb:ci
+# Wait a few seconds, then:
+curl -sf http://127.0.0.1:8000/v1/health
+docker stop etb_ci
+```
+
+On **Windows**, use **Docker Desktop** with the **WSL2** backend for Linux containers, and prefer **WSL** or **Git Bash** for `curl` if PowerShell is awkward. The repo’s `.gitattributes` keeps `*.sh` as LF so scripts mounted into containers are not broken by CRLF checkouts.
+
+### Full stack
+
+```bash
+# Build image (local tag)
 docker build -t etb_project:latest .
 
 # Run stack (Compose v2)

@@ -147,6 +147,7 @@ For a fuller component diagram and boundaries, see [`docs/ARCHITECTURE.md`](docs
 ## Contributing
 
 Please read [CONTRIBUTING.md](docs/CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+CI also runs Docker build and smoke checks on Ubuntu and a Docker build on Windows before packaging; see [Docker](docs/DEVELOPMENT.md#docker) in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
 ## License
 
