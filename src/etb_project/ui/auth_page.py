@@ -49,8 +49,8 @@ section[data-testid="stMain"] div.block-container {
   box-sizing: border-box;
 }
 
-/* Tabs + forms fill the fixed-width column */
-section[data-testid="stMain"] [data-testid="stTabs"],
+/* Mode switcher + forms fill the fixed-width column */
+section[data-testid="stMain"] [data-testid="stRadio"],
 section[data-testid="stMain"] [data-testid="stVerticalBlock"] {
   width: 100%;
 }
@@ -59,6 +59,9 @@ section[data-testid="stMain"] [data-testid="stForm"] {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  /* Sit above the radio widget root if label/collapsed wrappers overlap the form */
+  position: relative;
+  z-index: 1;
 }
 
 /* Text inputs span the full card width (stable across resizes) */
@@ -102,24 +105,38 @@ section[data-testid="stMain"] .stTextInput > label {
   line-height: 1.5;
 }
 
-/* Tabs: pill bar */
-[data-testid="stTabs"] [data-baseweb="tab-list"] {
+/*
+ * Pill-style horizontal radio only on the real option group.
+ * Do NOT use [data-testid="stRadio"] > div — the first direct child is often the
+ * widget label row (even when label_visibility="collapsed"), not the radiogroup.
+ * Styling that div with flex/padding/background can leave an invisible hit-target
+ * over the form so username/password fields cannot be focused or typed into.
+ */
+section[data-testid="stMain"] [data-testid="stRadio"] [role="radiogroup"] {
   gap: 0.4rem;
   background: rgba(0, 0, 0, 0.28);
   padding: 0.4rem;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   justify-content: center;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+  align-self: center;
+  box-sizing: border-box;
 }
 
-[data-testid="stTabs"] [data-baseweb="tab"] {
+section[data-testid="stMain"] [data-testid="stRadio"] [role="radiogroup"] label {
   border-radius: 999px !important;
   font-family: 'DM Sans', sans-serif;
   font-weight: 600;
   padding: 0.45rem 1.1rem !important;
+  margin: 0 !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
 }
 
-[data-testid="stTabs"] [aria-selected="true"] {
+section[data-testid="stMain"] [data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) {
   background: rgba(140, 90, 255, 0.4) !important;
   border: 1px solid rgba(190, 170, 255, 0.4) !important;
 }
@@ -196,9 +213,17 @@ def render_auth_screen() -> None:
         )
 
     with st.container(border=True):
-        tab_login, tab_reg = st.tabs(["Sign in", "Create account"])
+        # Use radio, not st.tabs: Streamlit often mishandles st.form + st.tabs (inactive
+        # tab panels, submit not firing, or rerun snapping back to the first tab).
+        auth_mode = st.radio(
+            "Auth mode",
+            ["Sign in", "Create account"],
+            horizontal=True,
+            key="auth_ui_mode",
+            label_visibility="collapsed",
+        )
 
-        with tab_login:
+        if auth_mode == "Sign in":
             with st.form("form_login", clear_on_submit=False):
                 st.markdown("##### Welcome back")
                 st.caption("Enter your credentials below.")
@@ -225,7 +250,7 @@ def render_auth_screen() -> None:
                         else:
                             st.error(err or "Invalid username or password.")
 
-        with tab_reg:
+        else:
             with st.form("form_register", clear_on_submit=False):
                 st.markdown("##### New account")
                 st.caption("Password must be at least 8 characters.")

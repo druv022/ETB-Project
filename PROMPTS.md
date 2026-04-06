@@ -140,3 +140,29 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-03-31**: `use conda etb env` — Verified `conda run -n etb python -m mypy src/etb_project` passes; README Conda section documents `conda run -n etb pre-commit run --all-files`.
 
 - **2026-03-31**: `fix` (pre-commit mypy on `auth_credentials` / `orion_chat` / `admin_bearer`) — Same code fixes as before were only in the working tree; pre-commit stashes unstaged changes and checks the **index**, so failures persisted until `git add` on those files plus `requirements.txt` / `pyproject.toml` (types-requests). `conda run -n etb pre-commit run mypy --all-files` passes after staging.
+
+- **2026-04-02**: `I just switched to the feature/admin branch. Can you explore the project structure and explain to me in simple terms: what does each folder do, what has changed from the main branch?` (Context: Tour of repo layout vs `main` — RAG chatbot, Streamlit UI, orchestrator API, retriever API, admin UI, Docker/docs/tooling.)
+
+- **2026-04-02**: `Open the files inside src/etb_project/ui/ and src/etb_project/ui/admin/. Explain what each file does in simple terms, and tell me: what is already working, what looks incomplete or placeholder, and what would I need to do to improve the UI design without breaking any backend logic.` (Context: File-by-file UI tour; working vs gaps; safe CSS/Streamlit-only design changes.)
+
+- **2026-04-02**: `Docker built successfully but etb_ollama container fails with: /entrypoint.sh: 4: set: Illegal option -. This is likely a Windows line endings issue (CRLF vs LF) in the entrypoint shell script inside the docker folder. Please fix the entrypoint script to use Unix line endings and fix any shell compatibility issues.` (Context: Normalized `docker/ollama-entrypoint.sh` and `docker/ollama-healthcheck.sh` to LF-only; added `.gitattributes` `docker/*.sh text eol=lf` so Windows checkouts stay Unix-safe.)
+
+- **2026-04-02**: `The etb_retriever container is failing with: PermissionError: [Errno 13] Permission denied: '/app/data/vector_index'. Please fix the docker-compose.yml to ensure the retriever container has the correct volume permissions for the data directory.` (Context: `retriever` service — `user: "0:0"` plus startup `chown -R appuser:appuser /app/data` and `runuser -u appuser` for uvicorn so named volume `etb_data` is writable by UID 1000.)
+
+- **2026-04-02**: `The fix for the retriever permissions did not work. The container is still failing with PermissionError: [Errno 13] Permission denied: '/app/data/vector_index' even after the docker-compose.yml change. Please check if the change was actually applied` (Context: Prior `user`/`chown` fix was present in repo; root cause was **volume order** — `etb_data:/app/data` before `.:/app` let the bind mount replace `/app` so `/app/data` was host `./data`, not the named volume. Reordered to `.:/app` then `etb_data:/app/data` for `retriever` and `ui`.)
+
+- **2026-04-02**: `Test the docker implementation of the project and test it in Cursor browser` (Context: `docker compose build` / `up -d`; verified Streamlit 200 and orchestrator `/docs` 200; retriever failed on `/app/data/vector_index` when `chown` is ineffective on Docker Desktop Windows — compose entrypoint updated to `mkdir` `vector_index`, ignore `chown` errors, `chmod -R a+rwx /app/data`. Cursor Simple Browser / MCP fetch cannot reach user localhost from cloud; user opens `http://localhost:8501` locally.)
+
+- **2026-04-02**: `The Create account button is not working on the Streamlit UI at localhost:8501. When I click it nothing happens. Can you check the auth_page.py and user_store.py files to identify why account creation is not functioning?` (Context: `user_store.register_user` is fine; issue was **st.tabs + st.form** (inactive panel / rerun snapping to first tab / submit quirks). Replaced tabs with horizontal **st.radio** so only one form exists per run; CSS retargeted for pill-style mode switch.)
+
+- **2026-04-02**: `Now I cant write anything in the username box password, neither in sign in tab and create account. Can you check what is happening ?` (Context: Auth CSS used `[data-testid="stRadio"] > div` for pill bar; first child is often the **collapsed widget label** wrapper, not the option row — flex/padding/background created an invisible layer over the form. Scoped pills to `[role="radiogroup"]`, `width: fit-content`, `z-index` on `stForm`.)
+
+- **2026-04-03**: `Test the UI interface with admin user name and admin password in cursor browser and verify it is fixed.` (Context: Playwright against `localhost:8501`; project `.env` had no `ETB_ADMIN_*`, so `etb_ui` showed admin disabled — added Compose defaults `${ETB_ADMIN_USERNAME:-admin}` / `${ETB_ADMIN_PASSWORD:-admin}` for local Docker; README / `.env.example` note.)
+
+- **2026-04-03**: `continue with the test` (Context: Recreated `ui` service after compose change; ran `scripts/_verify_admin_login_ui.py` to confirm admin login and admin shell.)
+
+- **2026-04-03**: `test it for me` (Context: `http://127.0.0.1:8501` returned HTTP 200; `scripts/_verify_admin_login_ui.py` passed — admin `admin`/`admin` sign-in reaches admin shell with **Administrator** and **Log out** visible.)
+
+- **2026-04-03**: `test it for me in cursor browser` (Context: Agent cannot open or control Cursor Simple Browser from the tool environment; re-ran `scripts/_verify_admin_login_ui.py` (pass). User steps: Command Palette → **Simple Browser: Show** → `http://localhost:8501` → Sign in with `admin` / `admin`.)
+
+- **2026-04-03**: `which is the prompt of the convesational agent ?` (Context: Pointed to `ORION_SYSTEM_PROMPT` in `src/etb_project/orchestrator/prompts.py` for Orion pre-retrieval clarification; noted RAG answer step uses inline instructions in `graph_rag.generate_answer`.)

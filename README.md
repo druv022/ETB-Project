@@ -78,11 +78,15 @@ The repo ships a **standalone retriever HTTP API** (retrieve + index PDFs). The 
 
 - `http://localhost:8501`
 
+**Docker note (Windows):** On Docker Desktop for Windows, volume `chown` is often ignored; the retriever entrypoint pre-creates `/app/data/vector_index` and runs `chmod -R a+rwx /app/data` so the non-root API user can write indices and uploads.
+
 **Docker note (Sources / images):** The retriever stores extracted PDF images under `ETB_DOCUMENT_OUTPUT_DIR` (Compose sets this to `/app/data/document_output` on the shared `etb_data` volume). The Streamlit UI loads them via the orchestrator at `GET /v1/assets/...`. If you set `RETRIEVER_API_KEY` on the retriever, set the same value in the UI environment (e.g. in `.env` used by Compose) as `RETRIEVER_API_KEY` or `ORCHESTRATOR_ASSET_BEARER_TOKEN` so image requests are authorized.
+
+**Docker note (admin login):** The `ui` service sets `ETB_ADMIN_USERNAME` / `ETB_ADMIN_PASSWORD` from your `.env` when present; otherwise Compose uses **`admin` / `admin`** so the admin shell works out of the box locally. Set strong values in `.env` before any shared or production deployment.
 
 ### Streamlit UI (login, admin, API tokens)
 
-The Orion UI requires **login**. The first screen is a centered, fixed max-width card (~28rem) with **Sign in** and **Create account** tabs so the form stays consistent across window sizes (forms with rate limiting). General users **register** in the app (SQLite DB; Compose persists it at `ETB_USERS_DB_PATH`, default `/app/data/users.sqlite` on the `etb_data` volume). **Admin** uses fixed credentials from the environment or Streamlit secrets (not from the UI):
+The Orion UI requires **login**. The first screen is a centered, fixed max-width card (~28rem) where you pick **Sign in** or **Create account**, then use that mode’s form (rate-limited). General users **register** in the app (SQLite DB; Compose persists it at `ETB_USERS_DB_PATH`, default `/app/data/users.sqlite` on the `etb_data` volume). **Admin** uses fixed credentials from the environment or Streamlit secrets (not from the UI):
 
 | Variable | Purpose |
 | --- | --- |
