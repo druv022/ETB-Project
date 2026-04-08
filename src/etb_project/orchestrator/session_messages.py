@@ -30,6 +30,11 @@ def serialize_messages(messages: list[Any] | None) -> list[dict[str, Any]]:
         if isinstance(m, BaseMessage):
             normalized.append(m)
         elif isinstance(m, dict):
+            # LangGraph may emit either:
+            # - "messages_to_dict" shaped dicts (with a "type" key), or
+            # - raw message-like dicts accepted by LangChain's convert helpers.
+            # We normalize both so the session store always contains the stable
+            # messages_to_dict() format.
             if m.get("type"):
                 normalized.extend(messages_from_dict([m]))
             else:

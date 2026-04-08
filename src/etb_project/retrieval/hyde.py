@@ -1,4 +1,17 @@
-"""HyDE passage generation using the shared chat LLM (retriever process only)."""
+"""HyDE passage generation for retrieval augmentation.
+
+HyDE (Hypothetical Document Embeddings) works by asking an LLM to generate a short
+"hypothetical" passage that *looks like* it could have come from the indexed
+corpus. That passage is then embedded and used to retrieve documents that may be
+relevant even when the original query is short or underspecified.
+
+This module is intentionally scoped to the **retriever service**:
+- It never answers the user; it only creates synthetic retrieval text.
+- It uses the same shared chat LLM instance as other retriever-side features
+  (e.g. reranking) to avoid per-request model construction overhead.
+- If the LLM is unavailable, HyDE silently degrades to "no HyDE" instead of
+  failing the whole retrieval request.
+"""
 
 from __future__ import annotations
 
@@ -42,6 +55,10 @@ def _get_lazy_chat_llm() -> BaseChatModel | None:
     try:
         _hyde_llm_instance = get_chat_llm()
     except Exception as exc:
+        # Model initialization issues (missing key, misconfigured base URL, etc.)
+        # should not repeatedly spam logs on every request. We log once, then
+        # cache the failure as "LLM unavailable" until process restart (or tests
+        # explicitly reset the cache).
         logger.error("HyDE: chat LLM initialization failed: %s", exc)
         _hyde_llm_instance = None
     return _hyde_llm_instance
@@ -50,6 +67,11 @@ def _get_lazy_chat_llm() -> BaseChatModel | None:
 def resolve_hyde_mode(
     request: RetrieveRequest, settings: RetrieverAPISettings
 ) -> HydeMode:
+    """Resolve HyDE behavior from request override + server default.
+
+    This keeps the API tolerant to clients sending unexpected values: anything
+    outside the supported set becomes ``off`` (rather than 400'ing the request).
+    """
     raw = (
         request.hyde_mode
         if request.hyde_mode is not None
@@ -61,6 +83,13 @@ def resolve_hyde_mode(
 
 
 def _extract_text_from_ai_message(message: AIMessage) -> str:
+    """Extract plain text across common LangChain message content shapes.
+
+    Some chat model integrations return ``message.content`` as a string while
+    others return a structured list of blocks (e.g. ``[{type: "text", ...}]``).
+    We normalize those variants into one trimmed string so downstream retrieval
+    isn't coupled to any specific provider's response format.
+    """
     content = message.content
     if isinstance(content, str):
         return content.strip()
@@ -101,9 +130,13 @@ def generate_hypothetical_passage(
     max_tok = settings.hyde_max_tokens
     try:
         try:
+            # Not every BaseChatModel supports ``bind(max_tokens=...)``. When it
+            # does, we prefer binding so tokens are enforced by the provider.
             bound = active.bind(max_tokens=max_tok)
             response = bound.invoke(messages)
         except (TypeError, ValueError, AttributeError):
+            # Fallback path for providers that either don't implement bind() or
+            # don't accept max_tokens as a bindable param.
             response = active.invoke(messages)
     except Exception as exc:
         rid = f" request_id={request_id}" if request_id else ""

@@ -138,3 +138,5 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-04-01**: `fix : @.../terminals/5.txt:8-85` (Context: pre-commit mypy — inline `hierarchy_backend` / `hierarchy_schema_version` in `IndexManifest.create` instead of `**dict[str, str | int]`; type parent rows as `Sequence[HierarchicalParent]` in `hierarchy_store`; Bandit B608 — replace dynamic `IN (...)` with per-id `WHERE parent_id = ?` queries.)
 
 - **2026-04-01**: `use conda etb env` (Context: run retriever-related pytest with `conda activate etb` so `langchain_core` / `fastapi` resolve; 32 tests passed for pipeline, hyde, bm25, api retriever.)
+
+- **2026-04-08**: `Document the code base with helpful comments to understand why or what is it doing.` (Context: add targeted docstrings and intent-focused comments in retriever modules for maintainability.)

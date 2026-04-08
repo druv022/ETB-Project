@@ -43,6 +43,8 @@ USER_PROMPT: Final[str] = "Summarize this image in one paragraph."
 
 
 def _image_data_url_for_path(path: Path) -> str:
+    # OpenAI-compatible vision APIs accept images as a URL or as a data URL.
+    # Using a data URL keeps this self-contained (no separate asset hosting).
     image_bytes = path.read_bytes()
     image_b64 = base64.b64encode(image_bytes).decode("utf-8")
     ext = path.suffix.lstrip(".").lower()
@@ -158,6 +160,8 @@ class ChatCompletionImageCaptioner(ImageCaptioner):
         api_key = self.api_key or os.environ.get(self.api_key_env)
         model = self.model or self._default_model()
         if not api_key or not model:
+            # Captioning is optional; if the user didn't configure credentials/model,
+            # we degrade to "no captions" rather than failing indexing.
             return None
 
         data_url = _image_data_url_for_path(path)

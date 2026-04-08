@@ -1,3 +1,17 @@
+"""In-process session storage for the orchestrator.
+
+This keeps chat history for a session id so the UI can be "stateless" between
+requests while the orchestrator remains stateful.
+
+Why in-memory:
+- Keeps the docker-compose default setup simple (no Redis dependency).
+- Sufficient for single-process local dev.
+
+Limitations:
+- Not shared across multiple orchestrator replicas.
+- Not persisted across process restarts.
+"""
+
 from __future__ import annotations
 
 import time

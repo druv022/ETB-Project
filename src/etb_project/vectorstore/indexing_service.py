@@ -1,3 +1,17 @@
+"""Index build/append orchestration for persisted vector stores.
+
+This module is the "glue" between:
+- Document processing (PDF → Documents + artifacts on disk)
+- Vector store construction/updating (FAISS add/persist)
+- Optional sparse export (BM25 corpus) and hierarchy index maintenance
+- A manifest that records the schema/version expectations of the persisted index
+
+Why it exists:
+- The retriever API and the CLI both need the same index lifecycle behaviors.
+- Append mode must enforce invariants (same chunking + embedding model) to avoid
+  silently mixing incompatible embeddings or chunk definitions in one index.
+"""
+
 from __future__ import annotations
 
 import sqlite3

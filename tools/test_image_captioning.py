@@ -48,6 +48,7 @@ def _project_root() -> Path:
 
 
 def _ensure_src_on_path() -> None:
+    # Lets you run this script without `pip install -e .` (dev convenience only).
     src = _project_root() / "src"
     if src.is_dir() and str(src) not in sys.path:
         sys.path.insert(0, str(src))

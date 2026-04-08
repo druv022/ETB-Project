@@ -1,7 +1,11 @@
+"""HTTP-style errors for the orchestrator (mapped to JSON by FastAPI handlers)."""
+
 from __future__ import annotations
 
 
 class OrchestratorAPIError(Exception):
+    """Predictable API failure with status code and stable machine ``code``."""
+
     def __init__(
         self,
         status_code: int,

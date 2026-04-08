@@ -47,6 +47,9 @@ def hierarchy_sqlite_path(vector_store_root: Path) -> Path:
 
 def hierarchy_index_usable(manifest: IndexManifest, vector_store_root: Path) -> bool:
     """True when manifest declares hierarchy v1 and ``hierarchy.sqlite`` exists."""
+    # We gate on BOTH manifest + file existence:
+    # - manifest ensures schema compatibility (future-proofing)
+    # - file ensures the index was actually persisted (append mode may fail mid-way)
     if manifest.hierarchy_schema_version != HIERARCHY_SCHEMA_VERSION:
         return False
     if manifest.hierarchy_backend != HIERARCHY_BACKEND_SQLITE_V1:
@@ -67,6 +70,7 @@ def replace_all_hierarchy(
     """Replace the hierarchy DB with the given parents and child documents."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
     if db_path.exists():
+        # Replace is simplest and avoids schema migration complexity for v1.
         db_path.unlink()
     conn = sqlite3.connect(str(db_path))
     try:
@@ -100,6 +104,7 @@ def append_parents_and_children(
         parent_id = str(meta.get("parent_id") or "")
         chunk_index = int(meta.get("chunk_index", 0))
         if not child_id or not parent_id:
+            # Non-hierarchical docs (or malformed docs) are ignored by the hierarchy index.
             continue
         conn.execute(
             "INSERT OR REPLACE INTO child (child_id, parent_id, chunk_index, text, metadata_json, faiss_text_id) "
@@ -135,6 +140,8 @@ def get_parents_ordered(
         if not unique:
             return []
         rows: dict[str, tuple[str, dict[str, Any]]] = {}
+        # Fetch one-by-one to avoid dynamic SQL IN (...) construction.
+        # This is safer and keeps Bandit from flagging B608 on string formatting.
         for pid in unique:
             cur = conn.execute(
                 "SELECT parent_id, full_text, metadata_json FROM parent WHERE parent_id = ?",

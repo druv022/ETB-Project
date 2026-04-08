@@ -1,4 +1,15 @@
-"""Single-query adapter that merges results from two retrievers."""
+"""Single-query adapter that merges results from two retrievers.
+
+This is primarily a UX/quality wrapper: the caller asks one question once, but
+we query two different indices/heads (e.g. text chunks and image-caption docs)
+and then merge results into a single list for downstream RAG.
+
+Key behavior:
+- De-duplicates near-identical documents across heads so the context window isn't
+  wasted repeating the same source.
+- Preserves head ordering bias (text results first, then caption results) while
+  still allowing caption-only hits to appear.
+"""
 
 from __future__ import annotations
 
@@ -17,6 +28,13 @@ class DualRetriever:
     k_total: int = 10
 
     def _doc_key(self, doc: Document) -> tuple[Any, ...]:
+        """Return a stable identity key for de-duplication across heads.
+
+        Preference order:
+        - ``child_id`` when present (hierarchical retrieval emits stable IDs and
+          page_content may be expanded/modified).
+        - A best-effort composite key from content + common provenance fields.
+        """
         metadata = doc.metadata or {}
         cid = metadata.get("child_id")
         if cid is not None:

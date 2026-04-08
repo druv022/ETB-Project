@@ -1,4 +1,17 @@
-"""LangGraph-based RAG graph with an extensible state."""
+"""LangGraph-based RAG graph with an extensible state.
+
+This is the core "reasoning + orchestration" pipeline used by:
+- The Orchestrator API (primary production path: UI → Orchestrator → Retriever).
+- The local CLI entrypoint for interactive demos.
+
+The graph is intentionally minimal but structured for growth:
+- ``ingest_query``: normalize input into a consistent message/state shape.
+- ``orion_gate`` (optional): decide whether to ask clarifying questions before
+  retrieval, or proceed with a refined query.
+- ``retrieve_rag``: fetch documents from a retriever interface.
+- ``generate_answer``: generate an answer grounded in retrieved context when
+  available, and explicitly state when an answer is ungrounded.
+"""
 
 from __future__ import annotations
 
@@ -190,6 +203,10 @@ def build_rag_graph(
                 "state clearly that the answer is not grounded in the document."
             )
 
+        # We collapse the "question + context" into a single user message to keep
+        # provider behavior consistent: some chat backends treat separate messages
+        # (system+user+user) differently for safety/formatting. This form keeps
+        # the state graph stable across providers.
         prompt = (
             f"{system_instruction}\n\nQuestion:\n{query}\n\nContext:\n{context_text}"
         )

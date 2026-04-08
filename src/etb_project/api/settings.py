@@ -1,4 +1,14 @@
-"""Environment-driven settings for the retriever HTTP API."""
+"""Environment-driven settings for the retriever HTTP API.
+
+The retriever is designed to run in Docker (compose) and in local dev, so most
+configuration is environment-variable driven. A YAML config (``ETB_CONFIG``) is
+still supported for shared defaults (e.g. vector store location, log level).
+
+Principles:
+- **Safe defaults** for local development.
+- **Hard caps** for request sizes to avoid accidental OOM / slow requests.
+- **Tolerant parsing**: unknown enum-like env values fall back to defaults.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +20,11 @@ from etb_project.config import DATA_DIR, load_config, resolve_artifact_path
 
 
 def _env_int(name: str, default: int) -> int:
+    """Parse integer env vars with a default.
+
+    We intentionally let ``ValueError`` propagate here: misconfigured numeric
+    limits are operational bugs that should fail fast on startup.
+    """
     raw = os.environ.get(name)
     if raw is None or raw.strip() == "":
         return default
@@ -17,6 +32,7 @@ def _env_int(name: str, default: int) -> int:
 
 
 def _env_bool(name: str, default: bool) -> bool:
+    """Parse boolean env vars with a default (common truthy strings only)."""
     raw = os.environ.get(name)
     if raw is None:
         return default
@@ -94,6 +110,8 @@ def load_api_settings() -> RetrieverAPISettings:
             "vector_store_path must be set in settings.yaml or ETB_CONFIG for the API."
         )
     vector_root = Path(vs)
+    # These paths are resolved under the project ``data/`` directory by default
+    # so Docker volumes can mount a single shared location for all artifacts.
     out_raw = os.environ.get("ETB_DOCUMENT_OUTPUT_DIR", "data/document_output")
     upload_raw = os.environ.get("ETB_UPLOAD_DIR", "data/uploads")
     doc_out = resolve_artifact_path(out_raw) or (DATA_DIR / "document_output")
@@ -104,6 +122,8 @@ def load_api_settings() -> RetrieverAPISettings:
     default_k = cfg.retriever_k
     max_k = min(100, _env_int("ETB_MAX_RETRIEVE_K", 100))
 
+    # ``k_fetch`` is an internal "over-fetch then fuse/rerank" control. It is
+    # allowed to be unset so the pipeline can compute a reasonable default.
     kfetch_env = os.environ.get("ETB_RETRIEVAL_K_FETCH", "").strip()
     retrieval_k_fetch = int(kfetch_env) if kfetch_env else None
 

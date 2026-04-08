@@ -13,6 +13,13 @@ from etb_project.vectorstore.sparse_export import SPARSE_VERSION
 
 
 def tokenize_bm25(text: str) -> list[str]:
+    """Tokenize for BM25.
+
+    Intentionally simple (whitespace + lowercase) because:
+    - It's fast and dependency-light.
+    - The sparse corpus is an auxiliary signal fused with dense heads (RRF),
+      so perfection here is less critical than determinism and robustness.
+    """
     return [t for t in text.lower().split() if t]
 
 
@@ -54,11 +61,15 @@ class Bm25DualSparseRetriever:
         text_docs, text_tok = _load_jsonl_corpus(text_path)
         cap_docs, cap_tok = _load_jsonl_corpus(cap_path)
 
+        # Text BM25 is mandatory for hybrid mode. Caption BM25 is optional because
+        # some PDFs have no images/captions, and we still want hybrid retrieval.
         if not text_docs:
             raise ValueError("BM25 text corpus is empty")
 
         text_bm25 = BM25Okapi(text_tok)
         cap_bm25: BM25Okapi | None = None
+        # If the caption corpus is empty (or tokenizes to empty strings), we
+        # treat it as "no caption BM25 head" rather than creating a useless index.
         if cap_docs and any(tok for tok in cap_tok):
             cap_bm25 = BM25Okapi(cap_tok)
 
@@ -106,6 +117,7 @@ def _bm25_top_k(
 ) -> list[Document]:
     q_tok = tokenize_bm25(query)
     if not q_tok:
+        # Avoid scoring on an empty token list (would return arbitrary ordering).
         return []
     scores = bm25.get_scores(q_tok)
     indexed = sorted(

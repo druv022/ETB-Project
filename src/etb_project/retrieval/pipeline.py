@@ -1,4 +1,15 @@
-"""Ensemble retrieval: dense FAISS heads, optional BM25, RRF, optional rerankers."""
+"""Ensemble retrieval: dense FAISS heads, optional BM25, RRF, optional rerankers.
+
+This is the core retrieval "policy" module: given a query and available indices,
+it decides which retrieval heads to run, how to fuse results, and how to rerank.
+
+Why the implementation uses explicit "heads":
+- It keeps retrieval experimentation modular (add/remove heads without rewriting
+  the full pipeline).
+- It allows parallel execution of independent heads to reduce latency.
+- It provides a single place to enforce caps (k_fetch, ensemble_cap) so new heads
+  don't accidentally explode retrieval cost.
+"""
 
 from __future__ import annotations
 
@@ -33,6 +44,8 @@ RetrieveStrategy = Literal["dense", "hybrid"]
 RerankerMode = Literal["off", "cosine", "cross_encoder", "llm"]
 
 # Head order for RRF tie-break (first appearance in this concatenation wins).
+# This matters when multiple documents have identical RRF scores: we prefer
+# earlier heads to keep output stable and aligned with our default priorities.
 HEAD_ORDER = (
     "dense_text_q",
     "dense_caption_q",
@@ -56,6 +69,11 @@ _cross_encoder_instance: Any = None
 
 
 def rrf_doc_key(doc: Document) -> tuple:
+    """Return a stable identity used for cross-head de-duplication.
+
+    When hierarchical retrieval is enabled, child chunks have stable ``child_id``.
+    Otherwise we fall back to a best-effort composite key (content + provenance).
+    """
     meta = doc.metadata or {}
     cid = meta.get("child_id")
     if cid is not None:
@@ -79,6 +97,9 @@ def ensemble_rrf(
     if not active:
         return []
 
+    # Track best rank per (doc_key, head_id). A document can appear in multiple
+    # heads, potentially at different ranks; we keep the best (lowest) rank per
+    # head for RRF scoring.
     best_rank: dict[tuple, dict[str, int]] = defaultdict(dict)
     for hid, lst in active:
         for rank, doc in enumerate(lst, start=1):
@@ -91,6 +112,8 @@ def ensemble_rrf(
     for key, per_head in best_rank.items():
         scores[key] = sum(1.0 / (k_rrf + r) for r in per_head.values())
 
+    # RRF alone can produce ties. We use the first position a doc appears in the
+    # concatenated head order as a deterministic tie-breaker.
     first_pos: dict[tuple, int] = {}
     pos = 0
     for hid in HEAD_ORDER:
@@ -126,6 +149,11 @@ def _cosine_rerank(
     docs: list[Document],
     embeddings: Embeddings,
 ) -> list[Document]:
+    """Lightweight reranker based on embedding cosine similarity.
+
+    This is intentionally "cheap": it avoids extra model calls while usually
+    improving ordering after fusion.
+    """
     if not docs:
         return []
     qv = np.asarray(embeddings.embed_query(query), dtype=np.float64)
@@ -154,6 +182,8 @@ def _get_cross_encoder(model_name: str) -> Any:
             "cross_encoder reranker requires sentence-transformers "
             "(pip install sentence-transformers)"
         ) from exc
+    # Cross-encoder models are heavy to load. Cache a singleton and replace only
+    # when the model name changes.
     if _cross_encoder_instance is None or _cross_encoder_model_loaded != model_name:
         _cross_encoder_instance = CrossEncoder(model_name)
         _cross_encoder_model_loaded = model_name
@@ -192,6 +222,8 @@ def _extract_text_ai(message: AIMessage) -> str:
 
 def _parse_llm_scores_json(text: str, expected: int) -> list[float] | None:
     text = text.strip()
+    # Some providers prepend/explain before the JSON. We try to salvage the
+    # trailing JSON object to keep reranking robust.
     m = re.search(r"\{[\s\S]*\}\s*$", text)
     if m:
         text = m.group(0)
@@ -227,6 +259,7 @@ def _llm_rerank(
     offset = 0
     rid = f" request_id={request_id}" if request_id else ""
 
+    # Score in batches to keep prompt size and token usage bounded.
     while offset < len(docs):
         batch = docs[offset : offset + batch_size]
         lines = [f"[{j}] {d.page_content[:4000]}" for j, d in enumerate(batch)]
@@ -239,6 +272,7 @@ def _llm_rerank(
             SystemMessage(content=_RERANK_LLM_SYSTEM),
             HumanMessage(content=user_content),
         ]
+        # As with HyDE generation, not all chat backends support bind(max_tokens).
         try:
             try:
                 bound = llm.bind(max_tokens=512)
@@ -266,6 +300,11 @@ def _llm_rerank(
 
 
 def effective_k_fetch(k: int, settings: RetrieverAPISettings) -> int:
+    """Compute how many docs each head should fetch before fusion/rerank.
+
+    Fetching more than ``k`` is important because fusion/reranking needs a pool
+    to reorder. We cap aggressively to avoid runaway latency/cost.
+    """
     if settings.retrieval_k_fetch is not None:
         base = settings.retrieval_k_fetch
     else:
@@ -314,6 +353,7 @@ def _execute_heads_parallel(
     if not tasks:
         return []
     by_id: dict[str, list[Document]] = {}
+    # Avoid threadpool overhead for the common single-head path.
     if len(tasks) == 1:
         hid, fn = tasks[0]
         by_id[hid] = _tag_head(fn(), hid)
@@ -356,6 +396,10 @@ def run_retrieval(
                 f" request_id={request_id}" if request_id else "",
             )
 
+    # HyDE modes:
+    # - off: query-only dense heads
+    # - replace: use HyDE passage heads only (unless HyDE fails)
+    # - fuse: run both query and HyDE dense heads, then fuse via RRF
     include_query_dense = (hyde_mode != "replace") or (not hyde_usable)
     include_hyde_dense = hyde_usable and hyde_mode in ("replace", "fuse")
 
@@ -389,6 +433,8 @@ def run_retrieval(
         tasks.append(("dense_text_h", _dense_text_h))
         tasks.append(("dense_caption_h", _dense_caption_h))
 
+    # Hybrid adds lexical BM25 heads. These are optional because the sparse corpus
+    # may not exist for older indices or dense-only builds.
     if strategy == "hybrid" and bm25 is not None:
 
         def _bm25_text() -> list[Document]:
@@ -404,6 +450,9 @@ def run_retrieval(
 
     hierarchy_active = hierarchy_sqlite_path is not None
     if hierarchy_active:
+        # This head is dense retrieval over the same text index, but its results
+        # are used *as child hits* that can later be expanded to full parent-page
+        # context. It stays in RRF so it competes with other heads.
         hier_retriever = text_vs.as_retriever(search_kwargs=text_r_kw)
 
         def _hier_child() -> list[Document]:
@@ -415,6 +464,8 @@ def run_retrieval(
 
     k_rrf = settings.rrf_k
     cap = settings.ensemble_cap
+    # Fusion happens before reranking so the reranker only sees a bounded,
+    # de-duplicated candidate set.
     merged = ensemble_rrf(heads, k_rrf=k_rrf, cap=cap)
 
     if settings.retrieval_debug:
@@ -450,6 +501,8 @@ def run_retrieval(
             request_id or "",
         )
 
+    # Parent expansion is intentionally last: it changes document content and can
+    # produce fewer than k results after collapsing children into unique parents.
     expand = _resolve_expand(request, settings, hierarchy_active)
     if expand and hierarchy_sqlite_path is not None and hierarchy_sqlite_path.is_file():
         top = expand_child_hits_to_parents(

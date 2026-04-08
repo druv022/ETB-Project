@@ -1,3 +1,20 @@
+"""Model/provider construction for ETB-project.
+
+This module centralizes the creation of:
+- **Chat LLMs** used by the orchestrator (and retriever-side features like HyDE).
+- **Embedding models** used by the retriever and indexing pipeline.
+
+Why centralize:
+- Keeps provider-specific environment variables in one place.
+- Avoids importing provider SDKs throughout the codebase.
+- Makes it easy to swap providers in Docker/CI by changing env vars only.
+
+Implementation detail:
+- ``FaissCompatibleEmbeddings`` normalizes embedding batch shapes because LangChain
+  FAISS expects a 2D matrix; some backends return a 1D vector for single-item
+  batches.
+"""
+
 from __future__ import annotations
 
 import os

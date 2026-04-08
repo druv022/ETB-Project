@@ -4,6 +4,9 @@ CLI entrypoint for the workflow-based report generation.
 This script is intentionally independent from the main application in
 `src/`. It operates entirely on the synthetic transaction database and
 the reporting utilities under `tools/data_generation/report_generation/`.
+
+Run from the **repository root** so ``import tools...`` resolves (or set
+``PYTHONPATH`` to the repo root).
 """
 
 from __future__ import annotations

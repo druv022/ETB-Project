@@ -17,6 +17,8 @@ SPARSE_VERSION = "bm25_v1"
 
 def stable_doc_id(doc: Document) -> str:
     """Deterministic id for sparse corpus rows (not used for RRF dedupe)."""
+    # Purposefully *not* using the FAISS internal id: we want the sparse export
+    # to be stable across rebuilds as long as the source text is the same.
     meta = doc.metadata or {}
     source = str(meta.get("source", ""))
     page = str(meta.get("page", ""))
@@ -46,6 +48,7 @@ def _atomic_write_text(path: Path, content: str) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(content)
+        # Atomic replace prevents partially-written files if the process crashes.
         os.replace(tmp, path)
     except Exception:
         try:
@@ -88,6 +91,8 @@ def export_sparse_corpus_from_documents(
         for d in caption_docs
     ]
 
+    # Stage into a temp folder and then atomically replace final files.
+    # This makes the sparse corpus resilient to interruptions during export.
     tmp_root = sparse_dir.parent / ".sparse_export_tmp"
     tmp_root.mkdir(parents=True, exist_ok=True)
     t_text = tmp_root / "text_corpus.jsonl"

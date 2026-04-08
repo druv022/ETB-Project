@@ -1,3 +1,19 @@
+"""FAISS persistence backend for ETB dual vector stores.
+
+The project maintains *two* dense indices:
+- **text**: chunk-level text content
+- **captions**: image-caption documents
+
+Why a backend abstraction:
+- Keeps persistence/load behavior (folder layout, manifest validation) in one place.
+- Makes it possible to add other vector DBs later without rewriting the indexing API.
+
+Compatibility note:
+- LangChain's `FAISS.load_local` signature has changed across versions. We use
+  signature inspection to pass only supported arguments while still enabling
+  deserialization for locally persisted indices.
+"""
+
 from __future__ import annotations
 
 import inspect

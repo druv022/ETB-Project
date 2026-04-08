@@ -1,3 +1,14 @@
+"""Environment-driven settings for the Orchestrator HTTP API.
+
+The orchestrator is the "brains" layer:
+- Owns the chat endpoint and session memory.
+- Calls the Retriever API for context (and proxies assets for the UI).
+- Calls the chat LLM to produce the final answer.
+
+Configuration is env-driven so Docker compose can wire services together without
+requiring code changes.
+"""
+
 from __future__ import annotations
 
 import os

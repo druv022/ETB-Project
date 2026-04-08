@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-# Flexible whitespace after READY TO RETRIEVE
+# Match "READY TO RETRIEVE:" with flexible spacing; model wording may vary slightly.
 _READY_PATTERN = re.compile(
     r"READY\s+TO\s+RETRIEVE\s*:",
     re.IGNORECASE | re.MULTILINE,

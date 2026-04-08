@@ -1,4 +1,9 @@
-"""Simple in-memory rate limiter (per client IP)."""
+"""Simple in-memory rate limiter (per client IP).
+
+This is a small guardrail for local dev / demo deployments to prevent accidental
+hammering (e.g. UI refresh loops or scripts). It is not meant to be a
+cryptographically strong abuse prevention system.
+"""
 
 from __future__ import annotations
 

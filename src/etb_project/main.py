@@ -1,4 +1,19 @@
-"""Main entry point for ETB-project."""
+"""CLI entry point for ETB-project.
+
+This module provides a minimal local developer experience:
+- Load configuration from YAML / env.
+- Choose a retrieval mode:
+  - ``local``: load persisted vector indices from disk (FAISS) and query them.
+  - ``remote``: call the standalone Retriever HTTP API via ``RemoteRetriever``.
+- Either run a single query (when ``config.query`` is set) or an interactive loop
+  backed by the LangGraph RAG pipeline.
+
+Design notes (why it is structured this way):
+- The retriever can be run as a separate service (Docker compose) or in-process.
+  This CLI supports both to make debugging and CI tests simpler.
+- The CLI disables Orion clarification by default in the interactive loop to
+  keep the terminal UX deterministic; the orchestrator enables it by default.
+"""
 
 import logging
 import os
@@ -110,6 +125,8 @@ def main() -> None:
 
     mode = os.environ.get("ETB_RETRIEVER_MODE", "local").strip().lower()
     if mode == "remote":
+        # Remote mode is used when running the retriever as a standalone service
+        # (e.g. Docker compose). The orchestrator and UI typically use this mode.
         base = os.environ.get("RETRIEVER_BASE_URL", "").strip().rstrip("/")
         if not base:
             logger.error(
@@ -125,6 +142,7 @@ def main() -> None:
         )
         logger.info("Using remote retriever at %s", base)
     else:
+        # Local mode is intended for quick experiments when indices exist on disk.
         retriever = _build_local_retriever(config)
         logger.info("Dual vector retrieval active (text + captions)")
     logger.info("Application started successfully")
@@ -137,7 +155,9 @@ def main() -> None:
             logger.info("Result %d: %s", i, snippet)
         return
 
-    # Interactive query loop using LangGraph
+    # Interactive query loop using LangGraph.
+    # Orion is disabled here so the CLI always "answers" rather than sometimes
+    # returning a clarification message depending on the model's judgement.
     logger.info("Enter a query (empty line to exit).")
     agent_llm = get_llm()
     rag_graph = build_rag_graph(

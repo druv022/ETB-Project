@@ -1,6 +1,10 @@
-# src/etb_project/studio_entry.py
-# import asyncio
+"""LangGraph Studio / ``langgraph dev`` entrypoint.
 
+Builds a minimal RAG graph from config: load PDF → chunk/embed → FAISS retriever.
+This path is for local Studio debugging, not production (which uses the
+orchestrator + remote retriever). Orion is disabled to keep Studio runs
+predictable.
+"""
 
 from etb_project.config import load_config
 from etb_project.graph_rag import build_rag_graph
@@ -17,10 +21,9 @@ def rag_app() -> object:
     if config.pdf is None:
         raise ValueError("Configuration missing 'pdf' path; cannot initialize RAG app.")
 
-    # Build retriever
     docs = load_pdf(config.pdf)
 
-    # Run blocking embedding work in a background thread via async helper.
+    # Blocking: embed + FAISS build (Studio invokes this at graph load time).
     vectorstore = process_documents(docs)
 
     retriever = vectorstore.as_retriever(search_kwargs={"k": config.retriever_k})

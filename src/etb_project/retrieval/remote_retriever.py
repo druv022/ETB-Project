@@ -35,6 +35,9 @@ class RemoteRetriever:
         headers: dict[str, str] = {}
         key = api_key or os.environ.get("RETRIEVER_API_KEY")
         if key:
+            # The retriever API uses an optional static bearer token. The
+            # orchestrator and CLI both forward this to support locked-down
+            # deployments without teaching the UI multiple auth mechanisms.
             headers["Authorization"] = f"Bearer {key}"
         self._client = httpx.Client(timeout=timeout_s, headers=headers)
 
@@ -49,12 +52,17 @@ class RemoteRetriever:
         if self._expand is not None:
             payload["expand"] = self._expand
         try:
+            # We use a persistent sync client for simplicity and to benefit from
+            # HTTP connection reuse (lower latency under repeated chat turns).
             response = self._client.post(url, json=payload)
         except httpx.RequestError as exc:
             logger.error("Remote retriever request failed: %s", exc)
             raise RuntimeError(f"Retriever service unreachable: {exc}") from exc
 
         if response.status_code == 503:
+            # The retriever uses 503 both for "index not ready" and other
+            # dependency failures (e.g. embeddings backend unavailable). We keep
+            # the error message user-actionable rather than exposing internals.
             raise RuntimeError(
                 "Retriever index not ready (503). Build the index or wait for readiness."
             )
@@ -63,6 +71,8 @@ class RemoteRetriever:
         response.raise_for_status()
         data = response.json()
         chunks = data.get("chunks") or []
+        # Convert the API's stable JSON shape into LangChain Documents expected by
+        # the rest of the pipeline.
         return [
             Document(
                 page_content=str(c.get("content", "")),

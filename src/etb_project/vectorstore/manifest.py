@@ -1,3 +1,15 @@
+"""Manifest format for persisted indices.
+
+The manifest is a small JSON file stored alongside the vector store folders.
+It allows the runtime to:
+- Detect whether an index is complete and loadable.
+- Enforce invariants for append mode (chunking config, embedding model id).
+- Advertise the presence/version of optional components (BM25 corpus, hierarchy sqlite).
+
+This is intentionally forward-compatible: new optional fields can be added while
+older manifests should still load with sensible defaults.
+"""
+
 from __future__ import annotations
 
 import json

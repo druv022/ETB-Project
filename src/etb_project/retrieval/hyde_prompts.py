@@ -1,4 +1,11 @@
-"""HyDE (Hypothetical Document Embeddings) prompts for the retriever service."""
+"""HyDE (Hypothetical Document Embeddings) prompts for the retriever service.
+
+These prompts are deliberately *not* "assistant answers".
+The goal is to generate embed-friendly text that resembles an excerpt from the
+indexed corpus, because HyDE uses the synthetic passage for retrieval signal.
+Answering the user (or emitting lists/markdown) tends to shift the text away
+from corpus prose and can hurt retrieval quality.
+"""
 
 HYDE_SYSTEM = """You write short passages that could appear in a technical or business document corpus.
 
