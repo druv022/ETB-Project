@@ -60,7 +60,7 @@ conda run -n etb pytest
 
 ## Quickstart
 
-1. Create a `.env` (e.g. `OPENROUTER_API_KEY=...` for the orchestrator’s OpenAI-compatible client) and configure `src/config/settings.yaml`, or set `ETB_CONFIG` to another YAML path.
+1. Create a `.env` (e.g. `OPENROUTER_API_KEY=...` for the orchestrator’s OpenAI-compatible client) and configure `src/config/settings.yaml`, or set `ETB_CONFIG` to another YAML path. Application LLM prompts (Orion, RAG answers, HyDE, LLM rerank, image captioning) live in `src/config/prompts.yaml`; set **`ETB_PROMPTS`** to override that file path. Report-generation prompts under `tools/` are separate and stay in `tools/data_generation/report_generation/llm_config.yaml` (see [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)).
 
 2. Start everything (UI + orchestrator + retriever + Ollama) with Docker:
 
@@ -124,7 +124,8 @@ ETB-Project/
 ├── requirements-dev.txt
 ├── src/
 │   ├── config/
-│   │   └── settings.yaml     # Primary YAML (see docs/CONFIGURATION.md)
+│   │   ├── settings.yaml     # Primary YAML (see docs/CONFIGURATION.md)
+│   │   └── prompts.yaml      # Application LLM prompts (Orion, RAG, HyDE, rerank, captions)
 │   └── etb_project/          # Main package (`pip install -e .`)
 │       ├── api/              # Retriever FastAPI
 │       ├── orchestrator/       # Orchestrator FastAPI (chat + asset proxy)

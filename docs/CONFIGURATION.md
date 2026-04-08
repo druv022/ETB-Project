@@ -6,7 +6,19 @@ This page documents:
 
 - where config is loaded from
 - the core settings in `src/config/settings.yaml`
+- application LLM prompts in `src/config/prompts.yaml`
 - environment variables used by the project
+
+## LLM prompts: `src/config/prompts.yaml`
+
+The main package loads all **application** chat/vision prompts (Orion gate, RAG answer instructions, HyDE, LLM rerank scoring, image captioning) from this file via `etb_project.prompts_config.load_prompts()`.
+
+Resolution:
+
+1. If **`ETB_PROMPTS`** is set, use that path (absolute or relative).
+2. Otherwise use **`prompts.yaml`** in the **same directory** as the resolved settings YAML (`ETB_CONFIG` or the default `src/config/settings.yaml`).
+
+Reporting utilities under `tools/data_generation/report_generation/` use **only** `tools/data_generation/report_generation/llm_config.yaml` for narrative/evaluation/rewrite prompts; they do not read `src/config/prompts.yaml`.
 
 ## Config file: `src/config/settings.yaml`
 
@@ -86,6 +98,8 @@ This project uses environment variables for:
 
 - `ETB_CONFIG`
   - Path to a YAML file to use instead of the default `src/config/settings.yaml` resolution.
+- `ETB_PROMPTS`
+  - Optional. Path to `prompts.yaml` for application LLM strings. If unset, `prompts.yaml` next to the resolved `ETB_CONFIG` / default settings file is used.
 
 ### CLI (`python -m etb_project.main`)
 

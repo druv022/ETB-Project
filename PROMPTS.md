@@ -140,3 +140,5 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-04-01**: `use conda etb env` (Context: run retriever-related pytest with `conda activate etb` so `langchain_core` / `fastapi` resolve; 32 tests passed for pipeline, hyde, bm25, api retriever.)
 
 - **2026-04-08**: `Document the code base with helpful comments to understand why or what is it doing.` (Context: add targeted docstrings and intent-focused comments in retriever modules for maintainability.)
+
+- **2026-04-08**: `Centralize application prompts in src/config/prompts.yaml` (Context: add `prompts.yaml`, `AppPrompts` + `load_prompts()` in `etb_project.prompts_config`, wire `graph_rag` / HyDE / pipeline / captioning; keep `tools/.../llm_config.yaml` for report LLM prompts; tests, README, CONFIGURATION docs.)

@@ -47,3 +47,55 @@ rewrite_system_prompt: |
   You are a senior management consultant rewriting report narratives.
   Improve the narrative using the evaluator's feedback while staying strictly grounded in the provided data and constraints.
   Preserve all factual content but enhance clarity, structure, and executive tone.
+
+# -----------------------------------------------------------------------------
+# Narrative generation (tools/data_generation/report_generation/llm_client.generate_report_narrative)
+# How: system parts joined with spaces; user template uses {target_words} and {context_json}
+# -----------------------------------------------------------------------------
+narrative_system_parts:
+  - "You are an expert retail analytics consultant."
+  - "Write clear, business-friendly PDF report narratives in plain English."
+  - "Base all statements strictly on the provided data."
+  - "When the data is insufficient to support a claim, explicitly state the limitation instead of guessing."
+
+narrative_user_template: |
+  You are preparing a narrative for a PDF analytics report.
+
+  Use the JSON data below to write a cohesive narrative that includes:
+  1) a short executive summary,
+  2) key drivers and patterns you see in the data,
+  3) any notable anomalies, risks, or data gaps, and
+  4) 2–4 concrete, action-oriented recommendations for retail stakeholders.
+
+  Keep the language concise and non-technical. Aim for roughly {target_words} words, but do not pad with obviously generic filler. Work strictly from the provided data and clearly mark any assumptions.
+
+  Here is the data as JSON:
+
+  {context_json}
+
+# -----------------------------------------------------------------------------
+# Report evaluation user message (llm_client.evaluate_report_quality)
+# How: format(payload_json=...); system prompt remains evaluation_system_prompt above
+# -----------------------------------------------------------------------------
+evaluation_user_template: |
+  Evaluate the quality of the following report.
+  Provide three things in plain text:
+  1) A numeric score from 0 to 10.
+  2) A short justification (2–4 sentences).
+  3) 3–5 concrete bullet-point suggestions for improvement.
+
+  Here is the report context as JSON:
+
+  {payload_json}
+
+# -----------------------------------------------------------------------------
+# Narrative rewrite user message (llm_client.rewrite_report_narrative)
+# How: format(payload_json=...); system prompt remains rewrite_system_prompt above
+# -----------------------------------------------------------------------------
+rewrite_user_template: |
+  Rewrite the report narrative to address the evaluator's feedback.
+  Do not invent new facts; stay consistent with the original narrative's data.
+
+  Here is the context as JSON:
+
+  {payload_json}

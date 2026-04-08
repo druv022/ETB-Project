@@ -24,7 +24,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from etb_project.api.schemas import RetrieveRequest
 from etb_project.api.settings import RetrieverAPISettings
 from etb_project.models import get_chat_llm
-from etb_project.retrieval.hyde_prompts import HYDE_SYSTEM, HYDE_USER_TEMPLATE
+from etb_project.prompts_config import load_prompts
 
 logger = logging.getLogger(__name__)
 
@@ -122,9 +122,10 @@ def generate_hypothetical_passage(
     if active is None:
         return None
 
-    user_content = HYDE_USER_TEMPLATE.format(query=query.strip())
+    p = load_prompts()
+    user_content = p.hyde_user_template.format(query=query.strip())
     messages = [
-        SystemMessage(content=HYDE_SYSTEM),
+        SystemMessage(content=p.hyde_system),
         HumanMessage(content=user_content),
     ]
     max_tok = settings.hyde_max_tokens

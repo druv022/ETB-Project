@@ -30,6 +30,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from etb_project.api.schemas import RetrieveRequest
 from etb_project.api.settings import RetrieverAPISettings
+from etb_project.prompts_config import load_prompts
 from etb_project.retrieval.hyde import (
     generate_hypothetical_passage,
     get_retriever_chat_llm,
@@ -57,12 +58,6 @@ HEAD_ORDER = (
 )
 
 _MAX_HEAD_WORKERS = 4
-
-_RERANK_LLM_SYSTEM = (
-    "You score how relevant each passage is to answering the user query. "
-    'Reply with ONLY a JSON object: {"scores": [<integer 0-10>, ...]} with exactly '
-    "one score per passage, in the same order as given."
-)
 
 _cross_encoder_model_loaded: str | None = None
 _cross_encoder_instance: Any = None
@@ -258,18 +253,18 @@ def _llm_rerank(
     all_scores: list[float] = []
     offset = 0
     rid = f" request_id={request_id}" if request_id else ""
+    rp = load_prompts()
 
     # Score in batches to keep prompt size and token usage bounded.
     while offset < len(docs):
         batch = docs[offset : offset + batch_size]
         lines = [f"[{j}] {d.page_content[:4000]}" for j, d in enumerate(batch)]
-        user_content = (
-            f"Query:\n{query.strip()}\n\n"
-            f"Passages (score each 0-10 for relevance to the query):\n"
-            + "\n\n".join(lines)
+        user_content = rp.rerank_user_template.format(
+            query=query.strip(),
+            passages_block="\n\n".join(lines),
         )
         messages = [
-            SystemMessage(content=_RERANK_LLM_SYSTEM),
+            SystemMessage(content=rp.rerank_llm_system),
             HumanMessage(content=user_content),
         ]
         # As with HyDE generation, not all chat backends support bind(max_tokens).

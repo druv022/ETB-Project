@@ -141,6 +141,108 @@ def load_evaluation_config() -> EvaluationConfig:
     return cfg
 
 
+@dataclass(frozen=True)
+class ReportLLMPrompts:
+    """Prompts for report narrative, evaluation, and rewrite (tools-local YAML)."""
+
+    narrative_system_parts: tuple[str, ...]
+    narrative_user_template: str
+    evaluation_user_template: str
+    rewrite_user_template: str
+
+
+def _read_llm_config_yaml() -> dict[str, Any]:
+    config_path = Path(__file__).with_name("llm_config.yaml")
+    if not config_path.exists():
+        return {}
+    try:
+        loaded = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
+_DEFAULT_NARRATIVE_SYSTEM_PARTS: tuple[str, ...] = (
+    "You are an expert retail analytics consultant.",
+    "Write clear, business-friendly PDF report narratives in plain English.",
+    "Base all statements strictly on the provided data.",
+    "When the data is insufficient to support a claim, explicitly state the limitation instead of guessing.",
+)
+
+_DEFAULT_NARRATIVE_USER_TEMPLATE = (
+    "You are preparing a narrative for a PDF analytics report.\n\n"
+    "Use the JSON data below to write a cohesive narrative that includes:\n"
+    "1) a short executive summary,\n"
+    "2) key drivers and patterns you see in the data,\n"
+    "3) any notable anomalies, risks, or data gaps, and\n"
+    "4) 2–4 concrete, action-oriented recommendations for retail stakeholders.\n\n"
+    "Keep the language concise and non-technical. "
+    "Aim for roughly {target_words} words, but do not pad with obviously generic filler. "
+    "Work strictly from the provided data and clearly mark any assumptions.\n\n"
+    "Here is the data as JSON:\n\n"
+    "{context_json}"
+)
+
+_DEFAULT_EVALUATION_USER_TEMPLATE = (
+    "Evaluate the quality of the following report.\n"
+    "Provide three things in plain text:\n"
+    "1) A numeric score from 0 to 10.\n"
+    "2) A short justification (2–4 sentences).\n"
+    "3) 3–5 concrete bullet-point suggestions for improvement.\n\n"
+    "Here is the report context as JSON:\n\n"
+    "{payload_json}"
+)
+
+_DEFAULT_REWRITE_USER_TEMPLATE = (
+    "Rewrite the report narrative to address the evaluator's feedback.\n"
+    "Do not invent new facts; stay consistent with the original narrative's data.\n\n"
+    "Here is the context as JSON:\n\n"
+    "{payload_json}"
+)
+
+
+def load_report_llm_prompts() -> ReportLLMPrompts:
+    """Load narrative/eval/rewrite user templates from ``llm_config.yaml``."""
+    data = _read_llm_config_yaml()
+    raw_parts = data.get("narrative_system_parts")
+    if (
+        isinstance(raw_parts, list)
+        and raw_parts
+        and all(isinstance(x, str) for x in raw_parts)
+    ):
+        narrative_parts = tuple(str(x) for x in raw_parts)
+    else:
+        narrative_parts = _DEFAULT_NARRATIVE_SYSTEM_PARTS
+
+    nut = data.get("narrative_user_template")
+    narrative_user = (
+        str(nut).strip()
+        if isinstance(nut, str) and str(nut).strip()
+        else _DEFAULT_NARRATIVE_USER_TEMPLATE
+    )
+
+    eut = data.get("evaluation_user_template")
+    evaluation_user = (
+        str(eut).strip()
+        if isinstance(eut, str) and str(eut).strip()
+        else _DEFAULT_EVALUATION_USER_TEMPLATE
+    )
+
+    rut = data.get("rewrite_user_template")
+    rewrite_user = (
+        str(rut).strip()
+        if isinstance(rut, str) and str(rut).strip()
+        else _DEFAULT_REWRITE_USER_TEMPLATE
+    )
+
+    return ReportLLMPrompts(
+        narrative_system_parts=narrative_parts,
+        narrative_user_template=narrative_user,
+        evaluation_user_template=evaluation_user,
+        rewrite_user_template=rewrite_user,
+    )
+
+
 def summarise_stats_for_llm(
     stats: Mapping[str, object],
     max_rows: int = 5,
@@ -204,13 +306,9 @@ def generate_report_narrative(
     model_name = config.model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
     structured_stats = summarise_stats_for_llm(stats)
+    rp = load_report_llm_prompts()
 
-    system_parts = [
-        "You are an expert retail analytics consultant.",
-        "Write clear, business-friendly PDF report narratives in plain English.",
-        "Base all statements strictly on the provided data.",
-        "When the data is insufficient to support a claim, explicitly state the limitation instead of guessing.",
-    ]
+    system_parts = list(rp.narrative_system_parts)
     if style:
         system_parts.append(f"Preferred narrative style: {style}")
     system_prompt = " ".join(system_parts)
@@ -226,18 +324,9 @@ def generate_report_narrative(
         "baseline_narrative": baseline_narrative,
     }
 
-    user_prompt = (
-        "You are preparing a narrative for a PDF analytics report.\n\n"
-        "Use the JSON data below to write a cohesive narrative that includes:\n"
-        "1) a short executive summary,\n"
-        "2) key drivers and patterns you see in the data,\n"
-        "3) any notable anomalies, risks, or data gaps, and\n"
-        "4) 2–4 concrete, action-oriented recommendations for retail stakeholders.\n\n"
-        "Keep the language concise and non-technical. "
-        f"Aim for roughly {target_words} words, but do not pad with obviously generic filler. "
-        "Work strictly from the provided data and clearly mark any assumptions.\n\n"
-        "Here is the data as JSON:\n\n"
-        f"{json.dumps(context, default=str, ensure_ascii=False)}"
+    user_prompt = rp.narrative_user_template.format(
+        target_words=target_words,
+        context_json=json.dumps(context, default=str, ensure_ascii=False),
     )
 
     if provider == "ollama":
@@ -338,6 +427,7 @@ def evaluate_report_quality(
     """
 
     eval_cfg = load_evaluation_config()
+    rp = load_report_llm_prompts()
     system_prompt = eval_cfg.get(
         "evaluation_system_prompt",
         "You are a senior management consultant evaluating PDF report quality.",
@@ -353,14 +443,8 @@ def evaluate_report_quality(
         "chart_titles": chart_titles or [],
     }
 
-    user_prompt = (
-        "Evaluate the quality of the following report.\n"
-        "Provide three things in plain text:\n"
-        "1) A numeric score from 0 to 10.\n"
-        "2) A short justification (2–4 sentences).\n"
-        "3) 3–5 concrete bullet-point suggestions for improvement.\n\n"
-        "Here is the report context as JSON:\n\n"
-        f"{json.dumps(payload, ensure_ascii=False, default=str)}"
+    user_prompt = rp.evaluation_user_template.format(
+        payload_json=json.dumps(payload, ensure_ascii=False, default=str),
     )
 
     llm, _ = _build_llm_client(backend=backend, model=model)
@@ -417,6 +501,7 @@ def rewrite_report_narrative(
     """
 
     eval_cfg = load_evaluation_config()
+    rp = load_report_llm_prompts()
     system_prompt = eval_cfg.get(
         "rewrite_system_prompt",
         "You are a senior consultant improving report narratives.",
@@ -432,11 +517,8 @@ def rewrite_report_narrative(
         "evaluation_feedback": evaluation_feedback,
     }
 
-    user_prompt = (
-        "Rewrite the report narrative to address the evaluator's feedback.\n"
-        "Do not invent new facts; stay consistent with the original narrative's data.\n\n"
-        "Here is the context as JSON:\n\n"
-        f"{json.dumps(payload, ensure_ascii=False, default=str)}"
+    user_prompt = rp.rewrite_user_template.format(
+        payload_json=json.dumps(payload, ensure_ascii=False, default=str),
     )
 
     llm, _ = _build_llm_client(backend=backend, model=model)
@@ -453,9 +535,11 @@ def rewrite_report_narrative(
 
 __all__ = [
     "LLMConfig",
+    "ReportLLMPrompts",
     "summarise_stats_for_llm",
     "generate_report_narrative",
     "load_evaluation_config",
+    "load_report_llm_prompts",
     "evaluate_report_quality",
     "rewrite_report_narrative",
 ]
