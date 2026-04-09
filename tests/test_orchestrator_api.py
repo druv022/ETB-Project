@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+import sqlite3
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from etb_project.orchestrator.app import create_app
+
+_TX_SCHEMA = """
+CREATE TABLE IF NOT EXISTS transactions (
+    Transaction_ID TEXT,
+    Transaction_Date TEXT,
+    Product_ID TEXT,
+    Net_Sales_Value REAL
+);
+"""
 
 
 @pytest.fixture
@@ -140,3 +150,63 @@ def test_assets_proxy_forwards_authorization_header(
         r = c.get("/v1/assets/images/x.png", headers={"Authorization": "Bearer secret"})
     assert r.status_code == 200
     assert r.content == b"abc"
+
+
+def test_transactions_query_returns_rows(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db = tmp_path / "orch_tx.db"
+    conn = sqlite3.connect(db)
+    try:
+        conn.executescript(_TX_SCHEMA)
+        conn.execute(
+            "INSERT INTO transactions (Transaction_ID, Transaction_Date, Product_ID, Net_Sales_Value) VALUES (?,?,?,?)",
+            ("A1", "2024-06-01", "P1", 99.5),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    monkeypatch.setenv("RETRIEVER_BASE_URL", "http://retriever:8000")
+    monkeypatch.setenv("ETB_LLM_PROVIDER", "openai_compat")
+    monkeypatch.setenv("OPENAI_MODEL", "stepfun/step-3.5-flash")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
+    monkeypatch.setenv("ETB_TRANSACTION_DB", str(db))
+    monkeypatch.setenv("ETB_TRANSACTION_SQL", str(tmp_path / "none.sql"))
+    monkeypatch.delenv("ETB_TRANSACTION_AUTO_BUILD_DB", raising=False)
+
+    with TestClient(create_app()) as c:
+        r = c.post(
+            "/v1/transactions/query",
+            json={"limit": 10, "include_catalog": False},
+        )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["row_count"] == 1
+    assert data["rows"][0]["Transaction_ID"] == "A1"
+    assert data["rows"][0]["Net_Sales_Value"] == 99.5
+    assert data["truncated"] is False
+
+
+def test_transactions_query_validation_error_on_bad_filter(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db = tmp_path / "orch_tx2.db"
+    sqlite3.connect(db).close()
+    monkeypatch.setenv("RETRIEVER_BASE_URL", "http://retriever:8000")
+    monkeypatch.setenv("ETB_LLM_PROVIDER", "openai_compat")
+    monkeypatch.setenv("OPENAI_MODEL", "stepfun/step-3.5-flash")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
+    monkeypatch.setenv("ETB_TRANSACTION_DB", str(db))
+    monkeypatch.delenv("ETB_TRANSACTION_AUTO_BUILD_DB", raising=False)
+
+    with TestClient(create_app()) as c:
+        r = c.post(
+            "/v1/transactions/query",
+            json={"filters": {"NotAColumn": ["x"]}, "include_catalog": False},
+        )
+    assert r.status_code == 422
+    body = r.json()
+    assert body["code"] == "VALIDATION_ERROR"

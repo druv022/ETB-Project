@@ -96,6 +96,25 @@ python -m etb_project.main
 
 If you need to build/update the persisted indices first (PDF preprocessing, chunking, optional captioning), see the docs below.
 
+### Transaction SQLite (orchestrator)
+
+The orchestrator exposes **`POST /v1/transactions/query`** for bounded reads from the synthetic `transactions` SQLite database (for subagents and scripts). Full request/response shapes and curl examples are in [`docs/ORCHESTRATOR_API.md`](docs/ORCHESTRATOR_API.md#post-v1transactionsquery).
+
+**Environment** (paths relative to the repo root unless absolute):
+
+| Variable | Purpose |
+|----------|---------|
+| `ETB_TRANSACTION_DB` | SQLite `.db` path (default: `data/transaction_database_5yrs_full.db`) |
+| `ETB_TRANSACTION_SQL` | Optional seed `.sql` (default: same basename as DB with `.sql`) |
+| `ETB_TRANSACTION_AUTO_BUILD_DB` | Set to `1`/`true` to allow importing from SQL on first access (**slow**; pre-build the `.db` for production) |
+| `ETB_PRODUCT_CATALOG` | Optional `PRODUCT_CATALOG.csv` for category merge |
+
+Python callers can use `etb_project.transaction_queries.load_transactions` without going through HTTP.
+
+**Security:** Same trust boundary as the rest of the orchestrator (typically a **private network**; no extra API key on this route).
+
+**Docker:** Mount the directory that holds your `.db` (often `./data`) into the orchestrator service so `ETB_TRANSACTION_DB` resolves to a real file inside the container.
+
 ## Documentation
 
 - **Start here**: [`docs/README.md`](docs/README.md)
@@ -135,6 +154,7 @@ ETB-Project/
 │       ├── vectorstore/
 │       ├── main.py
 │       ├── graph_rag.py
+│       ├── transaction_queries.py  # SQLite transactions helper + orchestrator query API
 │       └── ...
 ├── docker/                   # Ollama entrypoint / healthchecks
 ├── docs/                     # Start with docs/README.md

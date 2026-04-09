@@ -76,6 +76,50 @@ Response body:
 
 When Orion clarification is active (`ETB_ORION_CLARIFY=1`, default), a **clarify** turn returns **`sources: []`** because the retriever was not called.
 
+#### `POST /v1/transactions/query`
+
+Bounded, parameterized reads from the local synthetic SQLite **`transactions`** table (same schema as the reporting tools under `tools/data_generation/`). Intended for **subagents** and internal automation; there is **no separate API key** on this route—expose the orchestrator only on a trusted network.
+
+Request body:
+
+```json
+{
+  "start_date": "2024-01-01",
+  "end_date": "2024-12-31",
+  "filters": { "Store_Region": ["West", "East"] },
+  "limit": 500,
+  "include_catalog": true
+}
+```
+
+- `start_date` / `end_date`: optional, ISO `YYYY-MM-DD`, applied to `Transaction_Date`.
+- `filters`: optional map of **allowlisted** column names to string lists (`IN` query). Allowed keys: `Transaction_ID`, `Transaction_Date`, `Transaction_Time`, `Store_ID`, `Store_Region`, `Order_Channel`, `Customer_ID`, `Customer_Type`, `Product_ID`, `SKU`.
+- `limit`: default `500`, maximum `2000`. The response sets `truncated: true` when more rows matched than returned.
+- `include_catalog`: when `true` (default), merges `Category` from `PRODUCT_CATALOG.csv` when that file exists at the configured path.
+
+Response:
+
+```json
+{
+  "rows": [{ "Transaction_ID": "...", "Net_Sales_Value": 1.0 }],
+  "row_count": 1,
+  "truncated": false,
+  "detail": null
+}
+```
+
+`detail` may explain empty data (e.g. missing seed DB/SQL) or append a truncation note.
+
+**Operational note:** Importing from a large seed `.sql` on first access is **slow** and blocks the worker. Prefer a **pre-built `.db`**. Auto-import from SQL only runs when `ETB_TRANSACTION_AUTO_BUILD_DB` is truthy (`1`, `true`, `yes`, `on`).
+
+Example:
+
+```bash
+curl -sS -X POST http://localhost:8001/v1/transactions/query \
+  -H "Content-Type: application/json" \
+  -d '{"limit": 5, "include_catalog": false}'
+```
+
 ### Configuration (environment variables)
 
 **Orion (pre-retrieval clarification)**:
@@ -116,6 +160,17 @@ Sessions and CORS:
 
 - `ORCH_SESSION_TTL_SECONDS` (default: 7200)
 - `ORCH_CORS_ALLOW_ORIGINS` (comma-separated; optional)
+
+**Transaction SQLite** (for `POST /v1/transactions/query`):
+
+Paths are resolved from the **repository root** (parent of `src/`) when relative.
+
+- `ETB_TRANSACTION_DB` — SQLite file path (default: `data/transaction_database_5yrs_full.db`).
+- `ETB_TRANSACTION_SQL` — optional explicit seed `.sql` path (default: same path as the DB with extension `.sql`).
+- `ETB_TRANSACTION_AUTO_BUILD_DB` — when set, allows one-time creation of the DB by running the seed SQL script (expensive for large files).
+- `ETB_PRODUCT_CATALOG` — optional CSV path for category join (default: `tools/data_generation/Transaction_data/Ed_Data/PRODUCT_CATALOG.csv`).
+
+In Docker, **mount** the host folder that contains the `.db` (and optional `.sql`/CSV) so these paths exist inside the orchestrator container.
 
 ### Error envelope
 

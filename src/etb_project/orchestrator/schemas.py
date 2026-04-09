@@ -40,3 +40,20 @@ class ReadyResponse(BaseModel):
     ready: bool
     retriever_base_url: str | None = None
     llm_configured: bool
+
+
+class TransactionQueryRequest(BaseModel):
+    """Structured query for the synthetic SQLite ``transactions`` table."""
+
+    start_date: str | None = None
+    end_date: str | None = None
+    filters: dict[str, list[str]] | None = None
+    limit: int = Field(default=500, ge=1, le=2000)
+    include_catalog: bool = True
+
+
+class TransactionQueryResponse(BaseModel):
+    rows: list[dict[str, Any]]
+    row_count: int
+    truncated: bool
+    detail: str | None = None

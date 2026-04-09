@@ -22,6 +22,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
+from etb_project import transaction_queries
 from etb_project.graph_rag import build_rag_graph
 from etb_project.models import get_chat_llm
 from etb_project.orchestrator.exceptions import OrchestratorAPIError
@@ -32,6 +33,8 @@ from etb_project.orchestrator.schemas import (
     HealthResponse,
     ReadyResponse,
     SourceOut,
+    TransactionQueryRequest,
+    TransactionQueryResponse,
 )
 from etb_project.orchestrator.session_messages import (
     deserialize_messages,
@@ -294,5 +297,44 @@ def create_app() -> FastAPI:
         phase: Literal["clarify", "answer"] = "clarify" if rt == "clarify" else "answer"
 
         return ChatResponse(answer=answer, sources=sources, request_id=rid, phase=phase)
+
+    @app.post(
+        "/v1/transactions/query",
+        response_model=TransactionQueryResponse,
+        tags=["transactions"],
+    )
+    def transactions_query(body: TransactionQueryRequest) -> TransactionQueryResponse:
+        """Return JSON-safe transaction rows from the local SQLite database."""
+        try:
+            result = transaction_queries.load_transactions(
+                start_date=body.start_date,
+                end_date=body.end_date,
+                filters=body.filters,
+                limit=body.limit,
+                include_catalog=body.include_catalog,
+            )
+        except ValueError as exc:
+            raise OrchestratorAPIError(
+                422,
+                "VALIDATION_ERROR",
+                "Invalid transaction query.",
+                str(exc),
+            ) from exc
+
+        df = result.dataframe
+        rows = transaction_queries.dataframe_to_json_rows(df)
+        detail_parts: list[str] = []
+        if result.detail:
+            detail_parts.append(result.detail)
+        if result.truncated:
+            detail_parts.append(f"Results truncated to {body.limit} rows.")
+        detail_out = " ".join(detail_parts) if detail_parts else None
+
+        return TransactionQueryResponse(
+            rows=rows,
+            row_count=len(rows),
+            truncated=result.truncated,
+            detail=detail_out,
+        )
 
     return app
