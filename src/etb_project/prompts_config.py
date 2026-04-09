@@ -20,8 +20,12 @@ class AppPrompts(BaseModel):
     """All chat/vision prompts used by ``etb_project`` (not tools/)."""
 
     orion_system: str = Field(min_length=1)
+    data_router_system: str = Field(min_length=1)
+    transaction_gate_system: str = Field(min_length=1)
     rag_answer_with_context: str = Field(min_length=1)
     rag_answer_no_context: str = Field(min_length=1)
+    rag_answer_sql_only: str = Field(min_length=1)
+    rag_answer_with_context_and_sql: str = Field(min_length=1)
     hyde_system: str = Field(min_length=1)
     hyde_user_template: str = Field(min_length=1)
     rerank_llm_system: str = Field(min_length=1)

@@ -115,6 +115,14 @@ Python callers can use `etb_project.transaction_queries.load_transactions` witho
 
 **Docker:** Mount the directory that holds your `.db` (often `./data`) into the orchestrator service so `ETB_TRANSACTION_DB` resolves to a real file inside the container.
 
+### Hybrid chat: documents + transactions (`POST /v1/chat`)
+
+The **orchestrator** graph (not the local CLI `python -m etb_project.main`) can answer from **PDF retrieval**, **SQLite transactions**, or **both in one turn**. A small LLM step classifies the user message into `documents` | `transactions` | `both`. Transactional questions go through a **transaction gate** (clarify missing dates/filters vs emit structured JSON that maps to `load_transactions`); hybrid questions run **transaction gate → fetch → Orion (optional) → retrieve → answer**, with numbers grounded in the SQL row sample and policy in document chunks.
+
+- **API:** `ChatResponse` keeps `phase` as `clarify` | `answer` only. When clarifying, optional **`clarify_gate`** is `documents` or `transactions`. After an answer that used SQL, optional **`sql_meta`** carries `row_count`, `truncated`, and optional `detail`—**`sources` stays vector-only** (same as before).
+- **Env:** **`ETB_SQL_PROMPT_MAX_ROWS`** caps how many transaction rows are embedded in the LLM prompt (default `50`). Dates in structured params are **ISO `YYYY-MM-DD`** (UTC interpretation for MVP; see [`docs/ORCHESTRATOR_API.md`](docs/ORCHESTRATOR_API.md)).
+- **Limits:** Answers use **row-level** extracts with a cap, not built-in `GROUP BY` totals. For production, add **per-IP or per-session limits** on `/v1/chat` (similar to the retriever), keep the orchestrator on a **private network**, and avoid logging full transaction rows at INFO.
+
 ## Documentation
 
 - **Start here**: [`docs/README.md`](docs/README.md)

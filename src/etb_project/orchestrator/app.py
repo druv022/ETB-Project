@@ -33,6 +33,7 @@ from etb_project.orchestrator.schemas import (
     HealthResponse,
     ReadyResponse,
     SourceOut,
+    SqlMeta,
     TransactionQueryRequest,
     TransactionQueryResponse,
 )
@@ -256,16 +257,21 @@ def create_app() -> FastAPI:
         settings: OrchestratorSettings = Depends(get_settings),
         sessions: InMemorySessionStore = Depends(get_sessions),
     ) -> ChatResponse:
+        """Session-aware chat: routes documents vs transactions vs hybrid, then answers."""
         rid = getattr(request.state, "request_id", None)
         k = body.k or settings.default_k
 
         retriever = _build_retriever(settings, k=k)
         llm = get_chat_llm()
-        graph = build_rag_graph(llm=llm, retriever=retriever)
+        graph = build_rag_graph(llm=llm, retriever=retriever, enable_data_router=True)
 
         prior = deserialize_messages(sessions.get_messages(body.session_id))
         result: dict[str, Any] = graph.invoke(
-            {"query": body.message, "messages": prior}
+            {
+                "query": body.message,
+                "messages": prior,
+                "request_id": rid,
+            }
         )
         answer = (result.get("answer") or "").strip()
         if not answer:
@@ -295,8 +301,32 @@ def create_app() -> FastAPI:
 
         rt = result.get("route")
         phase: Literal["clarify", "answer"] = "clarify" if rt == "clarify" else "answer"
+        clarify_gate = (
+            result.get("clarify_gate")
+            if phase == "clarify"
+            and result.get("clarify_gate") in ("documents", "transactions")
+            else None
+        )
+        sql_meta_raw = result.get("sql_meta_out")
+        sql_meta: SqlMeta | None = None
+        if isinstance(sql_meta_raw, dict) and phase == "answer":
+            try:
+                sql_meta = SqlMeta(
+                    row_count=int(sql_meta_raw.get("row_count", 0)),
+                    truncated=bool(sql_meta_raw.get("truncated", False)),
+                    detail=sql_meta_raw.get("detail"),
+                )
+            except (TypeError, ValueError):
+                sql_meta = None
 
-        return ChatResponse(answer=answer, sources=sources, request_id=rid, phase=phase)
+        return ChatResponse(
+            answer=answer,
+            sources=sources,
+            request_id=rid,
+            phase=phase,
+            clarify_gate=clarify_gate,
+            sql_meta=sql_meta,
+        )
 
     @app.post(
         "/v1/transactions/query",

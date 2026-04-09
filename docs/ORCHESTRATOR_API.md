@@ -66,15 +66,23 @@ Response body:
     { "content": "string", "metadata": { "source": "file.pdf", "page": 1 } }
   ],
   "request_id": "string",
-  "phase": "clarify"
+  "phase": "clarify",
+  "clarify_gate": "documents",
+  "sql_meta": null
 }
 ```
 
+Optional fields: **`clarify_gate`** (`"documents"` | `"transactions"`) when `phase` is `"clarify"`; **`sql_meta`** (`{ "row_count": 0, "truncated": false, "detail": null }`) when `phase` is `"answer"` and a transaction fetch ran.
+
 (`phase` is `"answer"` after a normal retrieve-and-answer turn.)
 
-- **`phase`**: `"clarify"` when Orion returned a clarification only (no retrieval); `"answer"` when retrieval and grounded answering ran. Omitted or `null` in older clients; always set by the current server.
+- **`phase`**: `"clarify"` when a gate returned a clarification only (no final answer); `"answer"` when the graph produced a grounded answer. Omitted or `null` in older clients; always set by the current server.
+- **`clarify_gate`** (optional, only when `phase` is `"clarify"`): `"documents"` if the **Orion** document gate asked for more detail; `"transactions"` if the **transaction** gate asked for dates/filters before running SQLite. Lets UIs label which clarification path fired without changing the `phase` enum.
+- **`sql_meta`** (optional, when `phase` is `"answer"` and a transaction fetch ran): `{ "row_count", "truncated", "detail?" }` summarizing the row sample used in the answer. **`sources` remains vector-only** (retrieved PDF chunks); transaction rows are not duplicated into `sources`.
 
-When Orion clarification is active (`ETB_ORION_CLARIFY=1`, default), a **clarify** turn returns **`sources: []`** because the retriever was not called.
+The orchestrator LangGraph routes each turn to **documents**, **transactions**, or **both** (LLM router). **Transaction-only** turns skip retrieval; **hybrid** turns run the transaction fetch (after the transaction gate) then Orion (if enabled) and retrieval, then merge document context and SQL rows in the final prompt. Row-level data is capped for the LLM via **`ETB_SQL_PROMPT_MAX_ROWS`** (default `50`); `load_transactions` returns filtered rows, not server-side aggregates—treat totals in the answer as derived only from the sample unless you narrow filters or use reporting tools.
+
+When Orion clarification is active (`ETB_ORION_CLARIFY=1`, default), a **document clarify** turn returns **`sources: []`** because the retriever was not called. A **transaction clarify** turn likewise returns empty **`sources`** and no **`sql_meta`** until parameters are ready.
 
 #### `POST /v1/transactions/query`
 

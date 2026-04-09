@@ -26,8 +26,12 @@ def test_load_prompts_from_custom_path(
     yaml_path = tmp_path / "custom.yaml"
     data = {
         "orion_system": "x",
+        "data_router_system": "x",
+        "transaction_gate_system": "x",
         "rag_answer_with_context": "x",
         "rag_answer_no_context": "x",
+        "rag_answer_sql_only": "x",
+        "rag_answer_with_context_and_sql": "x",
         "hyde_system": "x",
         "hyde_user_template": "{query}",
         "rerank_llm_system": "x",

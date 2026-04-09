@@ -25,11 +25,33 @@ class ChatRequest(BaseModel):
     return_sources: bool = True
 
 
+class SqlMeta(BaseModel):
+    """Summary of a transaction fetch for clients (no full row payload)."""
+
+    row_count: int = 0
+    truncated: bool = False
+    detail: str | None = None
+
+
 class ChatResponse(BaseModel):
+    """Chat turn result: grounded answer and/or clarification, plus optional SQL summary.
+
+    ``sources`` remains **vector chunks only** (retriever). Transaction rows used in
+    the answer are summarized in ``sql_meta``, not duplicated as fake ``sources``.
+    """
+
     answer: str
     sources: list[SourceOut] = Field(default_factory=list)
     request_id: str | None = None
     phase: Literal["clarify", "answer"] | None = None
+    clarify_gate: Literal["documents", "transactions"] | None = Field(
+        default=None,
+        description="When phase is clarify, which gate produced the clarification.",
+    )
+    sql_meta: SqlMeta | None = Field(
+        default=None,
+        description="Row counts and truncation when a transaction fetch ran (answer phase).",
+    )
 
 
 class HealthResponse(BaseModel):
