@@ -166,3 +166,9 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-04-03**: `test it for me in cursor browser` (Context: Agent cannot open or control Cursor Simple Browser from the tool environment; re-ran `scripts/_verify_admin_login_ui.py` (pass). User steps: Command Palette → **Simple Browser: Show** → `http://localhost:8501` → Sign in with `admin` / `admin`.)
 
 - **2026-04-03**: `which is the prompt of the convesational agent ?` (Context: Pointed to `ORION_SYSTEM_PROMPT` in `src/etb_project/orchestrator/prompts.py` for Orion pre-retrieval clarification; noted RAG answer step uses inline instructions in `graph_rag.generate_answer`.)
+
+- **2026-04-16**: UI showed orchestrator error on chat (500 on `/v1/chat`). (Context: Explained 500 = orchestrator reached but internal failure; fixed `orion_chat.call_orchestrator_chat` to handle HTTP status before `raise_for_status` so 401 branch works, and to show clearer 5xx/4xx messages with hints for `OPENROUTER_API_KEY` / logs.)
+
+- **2026-04-16**: Follow-up: logs still showed OpenRouter `401 User not found` after recreate. (Context: `OPENROUTER_API_KEY` in `.env` was not always mapped to `OPENAI_API_KEY` inside the container due to Compose nested substitution on Windows; `models.OpenAICompatibleProvider` now falls back to `OPENROUTER_API_KEY` when `OPENAI_API_KEY` is unset; test added in `tests/test_models_providers.py`.)
+
+- **2026-04-16**: `Me sigue saliendo esto` (500 UI error). (Context: Container has key length 73; OpenRouter still returns `401 User not found` — provider rejects key; user needs new OpenRouter key and recreate services; optional UI restart for clearer error text).

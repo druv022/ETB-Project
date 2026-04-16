@@ -32,7 +32,6 @@ def call_orchestrator_chat(session_id: str, message: str) -> tuple[str, list[dic
         headers["Authorization"] = f"Bearer {key}"
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=120)
-        response.raise_for_status()
     except requests.RequestException as exc:
         return (
             "Orion could not reach the Orchestrator service. "
@@ -43,6 +42,23 @@ def call_orchestrator_chat(session_id: str, message: str) -> tuple[str, list[dic
         return (
             "Orchestrator rejected the request (401). If ``ETB_ORCHESTRATOR_API_KEY`` is set "
             "on the server, set the same value in the UI environment or ``.streamlit/secrets.toml``.",
+            [],
+        )
+    if response.status_code >= 500:
+        hint = (
+            "This is usually a failure **inside** the orchestrator (missing LLM API key, retriever error, or graph exception). "
+            "Check `docker compose logs etb_orchestrator --tail 80` and ensure `.env` sets "
+            "`OPENROUTER_API_KEY` or `OPENAI_API_KEY` (or set `ETB_LLM_PROVIDER=ollama` with Ollama running)."
+        )
+        return (
+            f"The orchestrator returned **{response.status_code}** from `/v1/chat`. {hint}\n\n"
+            f"Detail: `{response.text[:400]}`",
+            [],
+        )
+    if response.status_code >= 400:
+        return (
+            f"The orchestrator rejected the request (**{response.status_code}**). "
+            f"`{response.text[:500]}`",
             [],
         )
     data = response.json() if response.content else {}

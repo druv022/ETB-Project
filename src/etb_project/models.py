@@ -95,9 +95,15 @@ class OpenAICompatibleProvider(ChatModelProvider):
 
         kwargs: dict[str, Any] = {"model": model, "temperature": temperature}
 
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if api_key and api_key.strip():
-            kwargs["api_key"] = api_key.strip()
+        # Prefer OPENAI_API_KEY; fall back to OPENROUTER_API_KEY so Docker Compose
+        # hosts that only set OPENROUTER in `.env` work even when nested `${A:-${B}}`
+        # substitution does not expand (seen on some Windows / Compose setups).
+        raw_key = os.environ.get("OPENAI_API_KEY") or os.environ.get(
+            "OPENROUTER_API_KEY"
+        )
+        api_key = raw_key.strip() if raw_key else ""
+        if api_key:
+            kwargs["api_key"] = api_key
 
         base_url = os.environ.get("OPENAI_BASE_URL")
         if base_url and base_url.strip():
