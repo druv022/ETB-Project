@@ -96,6 +96,45 @@ python -m etb_project.main
 
 If you need to build/update the persisted indices first (PDF preprocessing, chunking, optional captioning), see the docs below.
 
+## RAGAS evaluation (offline)
+
+This repo includes a **decoupled** evaluation tool that treats the orchestrator as a **black-box HTTP service**.
+
+- **Install eval deps** (recommended in conda `etb` env):
+
+```bash
+conda run -n etb pip install -e ".[eval]"
+```
+
+- **Run a full synthetic eval pipeline** (PDF → synthetic questions → call `/v1/chat` → RAGAS → HTML):
+
+```bash
+conda run -n etb python -m etb_project.evaluation pipeline \
+  --pdf "path/to/your.pdf" \
+  --testset-size 20 \
+  --orchestrator-base-url "http://localhost:8001"
+```
+
+- **Outputs**:
+  - `data/evals/dashboard.html` (all runs + filters)
+  - `data/evals/runs/<run_id>/report.html` (per-run detail)
+
+**RAGAS metric scoring** uses an OpenAI-compatible API (required for `evaluate`):
+- `ETB_EVAL_OPENAI_API_KEY` (or `OPENAI_API_KEY`)
+- `ETB_EVAL_OPENAI_BASE_URL` (or `OPENAI_BASE_URL`) when not using the default OpenAI endpoint
+- `ETB_EVAL_METRICS_MODEL` (default `gpt-4o-mini`) — judge LLM for faithfulness, precision, etc.
+- `ETB_EVAL_EMBEDDING_MODEL` (default `text-embedding-3-small`) — embeddings for answer relevancy and answer correctness
+
+**Notes + git commit (optional):**
+- Disable AI Notes: add `--no-notes-llm`
+- Enable git commits for each run: add `--git-commit` (or set `ETB_EVAL_GIT_COMMIT=1`)
+- Notes LLM config (OpenAI-compatible):
+  - `ETB_EVAL_NOTES_MODEL` (default `gpt-4o-mini`)
+  - `ETB_EVAL_OPENAI_API_KEY` (or `OPENAI_API_KEY`)
+  - `ETB_EVAL_OPENAI_BASE_URL` (or `OPENAI_BASE_URL`)
+
+**Batch eval tip:** set `ETB_ORION_CLARIFY=0` for the orchestrator so it reliably enters the retrieve+answer path.
+
 ## Documentation
 
 - **Start here**: [`docs/README.md`](docs/README.md)

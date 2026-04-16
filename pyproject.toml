@@ -57,6 +57,15 @@ dev = [
     "ipython>=8.17",
 ]
 
+# Optional dependencies for offline evaluation tooling (RAGAS, dashboards).
+# Install with: pip install -e ".[eval]"
+eval = [
+    "ragas~=0.4.3",
+    "datasets>=2.14.0",
+    "jinja2>=3.1.0",
+    "pandas>=2.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/druv022/etb_project"
 Documentation = "https://github.com/druv022/etb_project#readme"
