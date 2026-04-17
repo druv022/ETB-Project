@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import hmac
 from collections.abc import Callable, Coroutine
 from typing import Any
@@ -13,20 +12,20 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 security_bearer = HTTPBearer(auto_error=False)
 
 
-def constant_time_equals(a: str, b: str) -> bool:
-    """Compare two strings in constant time (UTF-8 bytes)."""
-    try:
-        return hmac.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
-    except Exception:
-        return False
-
-
 def constant_time_token_match(presented: str | None, expected: str) -> bool:
-    """Compare bearer tokens via fixed-size digests to reduce timing signal leakage."""
+    """Compare bearer tokens in fixed-size constant-time byte space."""
     try:
-        presented_digest = hashlib.sha256((presented or "").encode("utf-8")).digest()
-        expected_digest = hashlib.sha256(expected.encode("utf-8")).digest()
-        return hmac.compare_digest(presented_digest, expected_digest)
+        presented_bytes = (presented or "").encode("utf-8")
+        expected_bytes = expected.encode("utf-8")
+        max_len = max(128, len(expected_bytes), len(presented_bytes))
+        presented_fixed = presented_bytes[:max_len].ljust(max_len, b"\x00")
+        expected_fixed = expected_bytes[:max_len].ljust(max_len, b"\x00")
+        payload_match = hmac.compare_digest(presented_fixed, expected_fixed)
+        length_match = hmac.compare_digest(
+            len(presented_bytes).to_bytes(8, "big"),
+            len(expected_bytes).to_bytes(8, "big"),
+        )
+        return payload_match and length_match
     except Exception:
         return False
 
