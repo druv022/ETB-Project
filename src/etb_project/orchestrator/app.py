@@ -19,9 +19,12 @@ import httpx
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
+from etb_project.common.admin_bearer import constant_time_equals
+from etb_project.common.http_audit import HttpAuditRingBuffer
 from etb_project.graph_rag import build_rag_graph
 from etb_project.models import get_chat_llm
 from etb_project.orchestrator.exceptions import OrchestratorAPIError
@@ -51,6 +54,8 @@ logger = logging.getLogger(__name__)
 
 _settings: OrchestratorSettings | None = None
 _sessions: InMemorySessionStore | None = None
+_orchestrator_audit = HttpAuditRingBuffer()
+_chat_bearer = HTTPBearer(auto_error=False)
 
 
 def get_settings() -> OrchestratorSettings:
@@ -66,6 +71,17 @@ def get_sessions() -> InMemorySessionStore:
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    def __init__(
+        self,
+        app: Any,
+        *,
+        audit: HttpAuditRingBuffer | None = None,
+        service_name: str = "orchestrator",
+    ) -> None:
+        super().__init__(app)
+        self._audit = audit
+        self._service_name = service_name
+
     async def dispatch(
         self,
         request: Request,
@@ -78,6 +94,14 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
         except Exception:
             duration_ms = (time.monotonic() - start) * 1000
+            if self._audit is not None:
+                self._audit.append(
+                    service=self._service_name,
+                    method=request.method,
+                    path=request.url.path,
+                    status=500,
+                    duration_ms=duration_ms,
+                )
             logger.exception(
                 "request_failed request_id=%s path=%s duration_ms=%.2f",
                 rid,
@@ -95,6 +119,16 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             getattr(response, "status_code", "?"),
             duration_ms,
         )
+        if self._audit is not None:
+            sc = getattr(response, "status_code", 500)
+            status_i = int(sc) if isinstance(sc, int) else 500
+            self._audit.append(
+                service=self._service_name,
+                method=request.method,
+                path=request.url.path,
+                status=status_i,
+                duration_ms=duration_ms,
+            )
         return response
 
 
@@ -106,6 +140,42 @@ def _error_response(
 ) -> JSONResponse:
     body = ErrorBody(code=code, message=message, detail=detail)
     return JSONResponse(status_code=status_code, content=body.model_dump())
+
+
+async def require_orchestrator_chat_key(
+    creds: HTTPAuthorizationCredentials | None = Depends(_chat_bearer),
+    settings: OrchestratorSettings = Depends(get_settings),
+) -> None:
+    expected = settings.orchestrator_chat_api_key
+    if not expected:
+        return
+    presented = creds.credentials if creds else ""
+    if not presented or not constant_time_equals(presented, expected):
+        raise OrchestratorAPIError(
+            401,
+            "UNAUTHORIZED",
+            "Invalid or missing bearer token.",
+        )
+
+
+async def require_orchestrator_admin(
+    creds: HTTPAuthorizationCredentials | None = Depends(_chat_bearer),
+    settings: OrchestratorSettings = Depends(get_settings),
+) -> None:
+    tok = settings.admin_api_token
+    if not tok:
+        raise OrchestratorAPIError(
+            404,
+            "NOT_FOUND",
+            "Admin API is not enabled.",
+        )
+    presented = creds.credentials if creds else ""
+    if not presented or not constant_time_equals(presented, tok):
+        raise OrchestratorAPIError(
+            401,
+            "UNAUTHORIZED",
+            "Invalid or missing admin bearer token.",
+        )
 
 
 def _build_retriever(settings: OrchestratorSettings, k: int) -> RemoteRetriever:
@@ -146,7 +216,11 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     app.include_router(build_tracing_router("etb-orchestrator"))
-    app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(
+        RequestLoggingMiddleware,
+        audit=_orchestrator_audit,
+        service_name="orchestrator",
+    )
 
     # CORS is optional; for docker-compose local dev it can stay unset.
     settings = load_orchestrator_settings()
@@ -250,7 +324,20 @@ def create_app() -> FastAPI:
         media_type = resp.headers.get("content-type") or "application/octet-stream"
         return Response(content=resp.content, media_type=media_type)
 
-    @app.post("/v1/chat", response_model=ChatResponse, tags=["chat"])
+    @app.get("/v1/admin/recent-logs", tags=["admin"])
+    async def recent_logs_orchestrator(
+        limit: int = 50,
+        _: None = Depends(require_orchestrator_admin),
+    ) -> dict[str, Any]:
+        cap = max(1, min(limit, 500))
+        return {"lines": _orchestrator_audit.as_dicts(cap)}
+
+    @app.post(
+        "/v1/chat",
+        response_model=ChatResponse,
+        tags=["chat"],
+        dependencies=[Depends(require_orchestrator_chat_key)],
+    )
     async def chat(
         request: Request,
         body: ChatRequest,

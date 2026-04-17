@@ -133,6 +133,9 @@ dmypy.json
 *~
 .DS_Store
 
+# Streamlit local secrets (keep secrets.toml.example in repo)
+.streamlit/secrets.toml
+
 # Project specific
 *.db
 *.sqlite

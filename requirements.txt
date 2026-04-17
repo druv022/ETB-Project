@@ -28,4 +28,6 @@ sentence-transformers>=2.2.0
 # Streamlit UI (Option A: UI calls orchestrator)
 streamlit>=1.31.0
 requests>=2.31.0
+types-requests>=2.31.0
 python-dotenv>=1.0.0
+bcrypt>=4.0.0

@@ -119,7 +119,7 @@ This file logs all prompts given to the AI agent for this project.
 
 - **2026-03-31**: `Fix image rendering after Docker deploy` (Context: implement plan — `asset_path` relative to top-level `ETB_DOCUMENT_OUTPUT_DIR` when indexing multiple PDFs; Docker `ETB_DOCUMENT_OUTPUT_DIR`/`ETB_UPLOAD_DIR`; UI derives asset paths from stored absolute paths, forwards bearer token for `/v1/assets`, tests and docs.)
 
-- **2026-03-31**: `use conda etb environment` (Context: document the **`ETB`** conda env in README; run pytest with `conda run -n ETB`; fix `_serialize_metadata` to use `_json_safe` so nested `image_captions` stay JSON-shaped for the retriever API test.)
+- **2026-03-31**: `use conda etb environment` / `use conda etb env` (Context: README **Conda** section standardizes on the **`etb`** env (`conda activate etb`, `conda run -n etb pytest`, Streamlit, uvicorn); **`ETB`** noted as an alternate env name if used locally.)
 
 - **2026-03-31**: `The source name is confusing: 1. f411370fd13b44fbb0c18db63207e351_pdf_with_image.pdf • p.1/1 — Provide only the necessary information. The first part is unnecessary for the user.` (Context: add `display_name_for_source_file` in `ui/asset_paths.py` to strip retriever upload prefix `{uuid.hex}_`; use in Streamlit `_format_source_header`; tests in `test_ui_asset_paths.py`.)
 
@@ -152,3 +152,59 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-04-17**: `The issue has been fixed. Please clean up the instrumentation.` (Context: removed debug NDJSON logging from `remote_retriever.py` and `api/app.py` — session `01bda8`.)
 
 - **2026-04-17**: `continue` / LangSmith tracing for retriever visibility — implement plan (tracing module, GET/PUT `/v1/tracing`, RunnableConfig on graph invoke, `@traceable` on remote/local retriever and `run_retrieval`; docs; use `conda run -n etb` for pytest/uv.)
+
+- **2026-03-31**: `Complete rest of the todo.` (Context: Streamlit access-control plan — `app.py` login/register + admin shell; `orion_chat.py` / `orion_theme.py`; `ui/admin/*` health/settings/logs/documents; orchestrator Bearer on chat; tests `test_user_auth_store`, `test_orchestrator_admin_auth`, `test_retriever_admin_routes`; README verification + `.streamlit/secrets.toml.example`; Docker UI `etb_data` + `ETB_USERS_DB_PATH` + `RETRIEVER_BASE_URL`.)
+
+- **2026-03-31**: `create a good looking user registration page. The current pages is not user friendly or centered to be specific.` (Context: `etb_project/ui/auth_page.py` — centered column layout, Outfit/DM Sans, pill tabs, bordered card, forms; `app.py` calls `render_auth_screen` and drops inlined auth; README Streamlit blurb updated.)
+
+- **2026-03-31**: `verify the UI in the cursor browser.` (Context: Cursor browser at `http://127.0.0.1:8501` — confirmed Orion title, Sign in / Create account tabs, forms and placeholders; raw CSS was visible without `<style>` wrapper — fixed `auth_page.py` to inject `<style>...</style>`.)
+
+- **2026-03-31**: `Adapt the fields such that it appears same in any window setting or adjustment.` (Context: `auth_page.py` — drop proportional `st.columns`; CSS `block-container` fixed `max-width: 28rem` with `min(28rem, calc(100vw - …))`, safe-area padding, full-width text inputs and forms; flex column centers content horizontally.)
+
+- **2026-03-31**: `Increase the Size of Orion as Logo of the page` (Context: `auth_page.py` — larger `clamp()` for `.auth-brand-title`, line-height and spacing; markup `<h1 class="auth-brand-title">`.)
+
+- **2026-03-31**: `fix the error` (pre-commit mypy failures) — Removed unused `type: ignore` in `auth_credentials.py`; added `types-requests` to `requirements.txt` and `pyproject.toml` dev; renamed duplicate `details` in `orion_chat.py`; fixed `require_admin_bearer_token` return type to `Callable[..., Coroutine[Any, Any, None]]` in `admin_bearer.py`.
+
+- **2026-03-31**: `use conda etb env` — Verified `conda run -n etb python -m mypy src/etb_project` passes; README Conda section documents `conda run -n etb pre-commit run --all-files`.
+
+- **2026-03-31**: `fix` (pre-commit mypy on `auth_credentials` / `orion_chat` / `admin_bearer`) — Same code fixes as before were only in the working tree; pre-commit stashes unstaged changes and checks the **index**, so failures persisted until `git add` on those files plus `requirements.txt` / `pyproject.toml` (types-requests). `conda run -n etb pre-commit run mypy --all-files` passes after staging.
+
+- **2026-04-02**: `I just switched to the feature/admin branch. Can you explore the project structure and explain to me in simple terms: what does each folder do, what has changed from the main branch?` (Context: Tour of repo layout vs `main` — RAG chatbot, Streamlit UI, orchestrator API, retriever API, admin UI, Docker/docs/tooling.)
+
+- **2026-04-02**: `Open the files inside src/etb_project/ui/ and src/etb_project/ui/admin/. Explain what each file does in simple terms, and tell me: what is already working, what looks incomplete or placeholder, and what would I need to do to improve the UI design without breaking any backend logic.` (Context: File-by-file UI tour; working vs gaps; safe CSS/Streamlit-only design changes.)
+
+- **2026-04-02**: `Docker built successfully but etb_ollama container fails with: /entrypoint.sh: 4: set: Illegal option -. This is likely a Windows line endings issue (CRLF vs LF) in the entrypoint shell script inside the docker folder. Please fix the entrypoint script to use Unix line endings and fix any shell compatibility issues.` (Context: Normalized `docker/ollama-entrypoint.sh` and `docker/ollama-healthcheck.sh` to LF-only; added `.gitattributes` `docker/*.sh text eol=lf` so Windows checkouts stay Unix-safe.)
+
+- **2026-04-02**: `The etb_retriever container is failing with: PermissionError: [Errno 13] Permission denied: '/app/data/vector_index'. Please fix the docker-compose.yml to ensure the retriever container has the correct volume permissions for the data directory.` (Context: `retriever` service — `user: "0:0"` plus startup `chown -R appuser:appuser /app/data` and `runuser -u appuser` for uvicorn so named volume `etb_data` is writable by UID 1000.)
+
+- **2026-04-02**: `The fix for the retriever permissions did not work. The container is still failing with PermissionError: [Errno 13] Permission denied: '/app/data/vector_index' even after the docker-compose.yml change. Please check if the change was actually applied` (Context: Prior `user`/`chown` fix was present in repo; root cause was **volume order** — `etb_data:/app/data` before `.:/app` let the bind mount replace `/app` so `/app/data` was host `./data`, not the named volume. Reordered to `.:/app` then `etb_data:/app/data` for `retriever` and `ui`.)
+
+- **2026-04-02**: `Test the docker implementation of the project and test it in Cursor browser` (Context: `docker compose build` / `up -d`; verified Streamlit 200 and orchestrator `/docs` 200; retriever failed on `/app/data/vector_index` when `chown` is ineffective on Docker Desktop Windows — compose entrypoint updated to `mkdir` `vector_index`, ignore `chown` errors, `chmod -R a+rwx /app/data`. Cursor Simple Browser / MCP fetch cannot reach user localhost from cloud; user opens `http://localhost:8501` locally.)
+
+- **2026-04-02**: `The Create account button is not working on the Streamlit UI at localhost:8501. When I click it nothing happens. Can you check the auth_page.py and user_store.py files to identify why account creation is not functioning?` (Context: `user_store.register_user` is fine; issue was **st.tabs + st.form** (inactive panel / rerun snapping to first tab / submit quirks). Replaced tabs with horizontal **st.radio** so only one form exists per run; CSS retargeted for pill-style mode switch.)
+
+- **2026-04-02**: `Now I cant write anything in the username box password, neither in sign in tab and create account. Can you check what is happening ?` (Context: Auth CSS used `[data-testid="stRadio"] > div` for pill bar; first child is often the **collapsed widget label** wrapper, not the option row — flex/padding/background created an invisible layer over the form. Scoped pills to `[role="radiogroup"]`, `width: fit-content`, `z-index` on `stForm`.)
+
+- **2026-04-03**: `Test the UI interface with admin user name and admin password in cursor browser and verify it is fixed.` (Context: Playwright against `localhost:8501`; project `.env` had no `ETB_ADMIN_*`, so `etb_ui` showed admin disabled — added Compose defaults `${ETB_ADMIN_USERNAME:-admin}` / `${ETB_ADMIN_PASSWORD:-admin}` for local Docker; README / `.env.example` note.)
+
+- **2026-04-03**: `continue with the test` (Context: Recreated `ui` service after compose change; ran `scripts/_verify_admin_login_ui.py` to confirm admin login and admin shell.)
+
+- **2026-04-03**: `test it for me` (Context: `http://127.0.0.1:8501` returned HTTP 200; `scripts/_verify_admin_login_ui.py` passed — admin `admin`/`admin` sign-in reaches admin shell with **Administrator** and **Log out** visible.)
+
+- **2026-04-03**: `test it for me in cursor browser` (Context: Agent cannot open or control Cursor Simple Browser from the tool environment; re-ran `scripts/_verify_admin_login_ui.py` (pass). User steps: Command Palette → **Simple Browser: Show** → `http://localhost:8501` → Sign in with `admin` / `admin`.)
+
+- **2026-04-03**: `which is the prompt of the convesational agent ?` (Context: Pointed to `ORION_SYSTEM_PROMPT` in `src/etb_project/orchestrator/prompts.py` for Orion pre-retrieval clarification; noted RAG answer step uses inline instructions in `graph_rag.generate_answer`.)
+
+- **2026-04-16**: UI showed orchestrator error on chat (500 on `/v1/chat`). (Context: Explained 500 = orchestrator reached but internal failure; fixed `orion_chat.call_orchestrator_chat` to handle HTTP status before `raise_for_status` so 401 branch works, and to show clearer 5xx/4xx messages with hints for `OPENROUTER_API_KEY` / logs.)
+
+- **2026-04-16**: Follow-up: logs still showed OpenRouter `401 User not found` after recreate. (Context: `OPENROUTER_API_KEY` in `.env` was not always mapped to `OPENAI_API_KEY` inside the container due to Compose nested substitution on Windows; `models.OpenAICompatibleProvider` now falls back to `OPENROUTER_API_KEY` when `OPENAI_API_KEY` is unset; test added in `tests/test_models_providers.py`.)
+
+- **2026-04-16**: `Me sigue saliendo esto` (500 UI error). (Context: Container has key length 73; OpenRouter still returns `401 User not found` — provider rejects key; user needs new OpenRouter key and recreate services; optional UI restart for clearer error text).
+
+- **2026-04-16**: `Redesign the Streamlit UI styling only — do not change any logic, layout structure, or component positioning. Specific changes: 1. Sidebar: remove emojis from navigation items, use clean text-only links with a subtle highlight on active page, fix any overlapping elements 2. Chat messages: add card-style bubbles with rounded corners (12px), more vertical padding between messages, user messages aligned right with a dark purple background, assistant messages aligned left with a slightly lighter dark background 3. 'What Orion does' section: clean card with border, no overlapping text 4. Input bar: keep fixed at bottom, add more padding inside the text field 5. Typography: use consistent font sizes, no bold headers that feel out of place Keep the dark purple gradient color scheme. Only modify CSS/styling and st.markdown style injections — do not touch any Python logic, API calls, or session state.` (Context: refined `src/etb_project/ui/orion_theme.py` only: text-only minimal sidebar styles, message card bubbles with 12px radius and role-based alignment/colors, fixed padded bottom input bar, cleaned expander card styling, and consistent Inter-based typography with dark purple gradient.)
+
+- **2026-04-16**: `Mira como esta el chat por atras de la barra de la izquierda` (Context: fixed desktop overlap in `src/etb_project/ui/orion_theme.py` by offsetting fixed `stChatInput` to start after sidebar width, added desktop block-container side padding, and cleaned expander summary header styling to prevent overlapped title text.)
+
+- **2026-04-16**: `Ahora,  hay texto sobrepuesto que hace eso ahi ?` (Context: diagnosed overlap in expander title as CSS over-customization of `summary`; simplified expander summary styling in `src/etb_project/ui/orion_theme.py` by removing forced flex/marker overrides and normalizing summary text line-height.)
+
+- **2026-04-16**: `Fijate como todavai esta sobrepuesto` (Context: root cause was global `span` font override forcing Inter on Streamlit Material Symbols; fixed in `src/etb_project/ui/orion_theme.py` by excluding generic span from typography rule and restoring Material Symbols font-family for icon selectors.)

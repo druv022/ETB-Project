@@ -10,6 +10,7 @@ import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 from fastapi import (
     BackgroundTasks,
@@ -43,6 +44,8 @@ from etb_project.api.schemas import (
 )
 from etb_project.api.settings import RetrieverAPISettings, load_api_settings
 from etb_project.api.state import RetrieverServiceState, _serialize_metadata
+from etb_project.common.admin_bearer import constant_time_equals
+from etb_project.common.http_audit import HttpAuditRingBuffer
 from etb_project.retrieval.exceptions import HybridSparseUnavailableError
 from etb_project.tracing.routes import build_tracing_router
 
@@ -56,6 +59,7 @@ _jobs: JobRegistry | None = None
 _rate_limiter: RateLimiter | None = None
 _index_exclusive = threading.Lock()
 _shutting_down = threading.Event()
+_retriever_audit = HttpAuditRingBuffer()
 
 
 def get_settings() -> RetrieverAPISettings:
@@ -82,7 +86,38 @@ def get_rate_limiter() -> RateLimiter:
     return _rate_limiter
 
 
+async def require_retriever_admin(
+    creds: HTTPAuthorizationCredentials | None = Depends(security),
+    settings: RetrieverAPISettings = Depends(get_settings),
+) -> None:
+    tok = settings.admin_api_token
+    if not tok:
+        raise RetrieverAPIError(
+            404,
+            "NOT_FOUND",
+            "Admin API is not enabled.",
+        )
+    presented = creds.credentials if creds else ""
+    if not presented or not constant_time_equals(presented, tok):
+        raise RetrieverAPIError(
+            401,
+            "UNAUTHORIZED",
+            "Invalid or missing admin bearer token.",
+        )
+
+
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    def __init__(
+        self,
+        app: Any,
+        *,
+        audit: HttpAuditRingBuffer | None = None,
+        service_name: str = "retriever",
+    ) -> None:
+        super().__init__(app)
+        self._audit = audit
+        self._service_name = service_name
+
     async def dispatch(
         self,
         request: Request,
@@ -95,6 +130,14 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
         except Exception:
             duration_ms = (time.monotonic() - start) * 1000
+            if self._audit is not None:
+                self._audit.append(
+                    service=self._service_name,
+                    method=request.method,
+                    path=request.url.path,
+                    status=500,
+                    duration_ms=duration_ms,
+                )
             logger.exception(
                 "request_failed request_id=%s path=%s duration_ms=%.2f",
                 rid,
@@ -112,6 +155,16 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             getattr(response, "status_code", "?"),
             duration_ms,
         )
+        if self._audit is not None:
+            sc = getattr(response, "status_code", 500)
+            status_i = int(sc) if isinstance(sc, int) else 500
+            self._audit.append(
+                service=self._service_name,
+                method=request.method,
+                path=request.url.path,
+                status=status_i,
+                duration_ms=duration_ms,
+            )
         return response
 
 
@@ -283,7 +336,11 @@ def create_app() -> FastAPI:
         )
     )
     app.add_middleware(AssetTraversalGuardMiddleware)
-    app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(
+        RequestLoggingMiddleware,
+        audit=_retriever_audit,
+        service_name="retriever",
+    )
 
     @app.exception_handler(RetrieverAPIError)
     async def _retriever_api_error_handler(
@@ -549,5 +606,118 @@ def create_app() -> FastAPI:
             message=job.message,
             error=job.error,
         )
+
+    @app.get("/v1/admin/recent-logs", tags=["admin"])
+    async def recent_logs_retriever(
+        limit: int = 50,
+        _: None = Depends(require_retriever_admin),
+    ) -> dict[str, Any]:
+        cap = max(1, min(limit, 500))
+        return {"lines": _retriever_audit.as_dicts(cap)}
+
+    @app.get("/v1/admin/uploads", tags=["admin"])
+    async def list_uploads(
+        settings: RetrieverAPISettings = Depends(get_settings),
+        _: None = Depends(require_retriever_admin),
+    ) -> dict[str, Any]:
+        root = settings.upload_dir.resolve()
+        files: list[dict[str, Any]] = []
+        if root.exists():
+            for p in sorted(root.iterdir()):
+                if p.is_file() and p.suffix.lower() == ".pdf":
+                    try:
+                        rel = p.resolve().relative_to(root)
+                    except ValueError:
+                        continue
+                    files.append(
+                        {
+                            "id": rel.as_posix(),
+                            "name": p.name,
+                            "size": p.stat().st_size,
+                        }
+                    )
+        return {"files": files}
+
+    @app.delete("/v1/admin/uploads/{file_id}", tags=["admin"])
+    async def delete_upload(
+        file_id: str,
+        settings: RetrieverAPISettings = Depends(get_settings),
+        _: None = Depends(require_retriever_admin),
+    ) -> dict[str, str]:
+        if not file_id or file_id.strip() != file_id:
+            raise RetrieverAPIError(400, "BAD_REQUEST", "Invalid file id.")
+        if "/" in file_id or file_id in (".", ".."):
+            raise RetrieverAPIError(400, "BAD_REQUEST", "Invalid file id.")
+        root = settings.upload_dir.resolve()
+        candidate = (root / file_id).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError as exc:
+            raise RetrieverAPIError(400, "BAD_REQUEST", "Invalid file path.") from exc
+        if not candidate.is_file():
+            raise RetrieverAPIError(404, "NOT_FOUND", "File not found.")
+        candidate.unlink()
+        return {"deleted": file_id}
+
+    @app.post(
+        "/v1/admin/reindex-from-uploads",
+        tags=["admin"],
+        response_model=IndexAcceptedResponse | JobAcceptedResponse,
+    )
+    async def admin_reindex_from_uploads(
+        request: Request,
+        background_tasks: BackgroundTasks,
+        settings: RetrieverAPISettings = Depends(get_settings),
+        _: None = Depends(require_retriever_admin),
+    ) -> IndexAcceptedResponse | JobAcceptedResponse:
+        if _shutting_down.is_set():
+            raise RetrieverAPIError(
+                503,
+                "SERVICE_UNAVAILABLE",
+                "Service is shutting down.",
+            )
+        rl = get_rate_limiter()
+        if not rl.allow(_client_ip(request) + ":admin_reindex"):
+            raise RetrieverAPIError(
+                429,
+                "RATE_LIMITED",
+                "Too many requests.",
+            )
+        root = settings.upload_dir.resolve()
+        paths = sorted(root.glob("*.pdf"))
+        saved = [str(p.resolve()) for p in paths if p.is_file()]
+        if not saved:
+            raise RetrieverAPIError(
+                400,
+                "NO_FILES",
+                "No PDF files in upload directory.",
+            )
+        use_async = settings.job_poll_enabled
+        if use_async:
+            job_reg = get_jobs()
+            job = job_reg.create()
+            background_tasks.add_task(
+                _index_job_wrapper,
+                job.job_id,
+                saved,
+                True,
+            )
+            base = str(request.base_url).rstrip("/")
+            return JobAcceptedResponse(
+                job_id=job.job_id,
+                status="pending",
+                poll_url=f"{base}/v1/jobs/{job.job_id}",
+            )
+        if not _index_exclusive.acquire(blocking=False):
+            raise RetrieverAPIError(
+                423,
+                "INDEX_BUSY",
+                "Another indexing operation is in progress.",
+            )
+        try:
+            _run_index_sync(saved, True, job_id=None)
+        finally:
+            _index_exclusive.release()
+        return IndexAcceptedResponse()
 
     return app

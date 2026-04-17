@@ -28,6 +28,8 @@ class OrchestratorSettings:
 
     cors_allow_origins: list[str]
     session_ttl_seconds: int
+    orchestrator_chat_api_key: str | None
+    admin_api_token: str | None
 
 
 def _split_csv_env(name: str) -> list[str]:
@@ -35,6 +37,13 @@ def _split_csv_env(name: str) -> list[str]:
     if not raw:
         return []
     return [p.strip() for p in raw.split(",") if p.strip()]
+
+
+def _optional_nonempty_env(name: str) -> str | None:
+    raw = os.environ.get(name)
+    if raw is None or str(raw).strip() == "":
+        return None
+    return str(raw).strip()
 
 
 def load_orchestrator_settings() -> OrchestratorSettings:
@@ -60,4 +69,6 @@ def load_orchestrator_settings() -> OrchestratorSettings:
         retriever_strategy=retriever_strategy,
         cors_allow_origins=cors_allow_origins,
         session_ttl_seconds=session_ttl_seconds,
+        orchestrator_chat_api_key=_optional_nonempty_env("ETB_ORCHESTRATOR_API_KEY"),
+        admin_api_token=_optional_nonempty_env("ETB_ADMIN_API_TOKEN"),
     )
