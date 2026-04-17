@@ -196,6 +196,16 @@ This project is licensed under the Apache-2.0 License - see the LICENSE file for
 - Email: pujarydhruba@gmail.com
 - GitHub: [@druv022](https://github.com/druv022)
 
+**Moises Galindo**
+
+- Email: galinde@purdue.edu
+- GitHub: [galindomoises76-netizen](https://github.com/galindomoises76-netizen)
+
+**Rajkumar Karthikeyan**
+
+- Email: karthi47@purdue.edu
+- GitHub: [rajkumark47](https://github.com/rajkumark47)
+
 ## Acknowledgments
 
 - Built with [Cookiecutter](https://github.com/cookiecutter/cookiecutter)
