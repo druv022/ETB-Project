@@ -10,6 +10,7 @@ import uvicorn
 def main() -> None:
     host = os.environ.get("ETB_API_HOST", "0.0.0.0")  # nosec B104
     port = int(os.environ.get("PORT", os.environ.get("ETB_API_PORT", "8000")))
+    # factory=True: each worker gets a fresh app (correct lifespan + test isolation).
     uvicorn.run(
         "etb_project.api.app:create_app",
         factory=True,

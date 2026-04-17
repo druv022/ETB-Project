@@ -1,4 +1,17 @@
-"""LangGraph-based RAG graph with an extensible state."""
+"""LangGraph-based RAG graph with an extensible state.
+
+This is the core "reasoning + orchestration" pipeline used by:
+- The Orchestrator API (primary production path: UI → Orchestrator → Retriever).
+- The local CLI entrypoint for interactive demos.
+
+The graph is intentionally minimal but structured for growth:
+- ``ingest_query``: normalize input into a consistent message/state shape.
+- ``orion_gate`` (optional): decide whether to ask clarifying questions before
+  retrieval, or proceed with a refined query.
+- ``retrieve_rag``: fetch documents from a retriever interface.
+- ``generate_answer``: generate an answer grounded in retrieved context when
+  available, and explicitly state when an answer is ungrounded.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +26,7 @@ from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
 from etb_project.orchestrator.orion_parse import parse_orion_response
-from etb_project.orchestrator.prompts import ORION_SYSTEM_PROMPT
+from etb_project.prompts_config import load_prompts
 
 
 class RAGState(TypedDict, total=False):
@@ -93,6 +106,7 @@ def build_rag_graph(
         ``ETB_ORION_CLARIFY`` (default ``1`` = enabled).
     """
     orion_on = _orion_gate_enabled(enable_orion_gate)
+    prompts = load_prompts()
 
     def ingest_query(state: RAGState) -> RAGState:
         """Convert raw query text into initial message state.
@@ -118,7 +132,7 @@ def build_rag_graph(
     def orion_gate(state: RAGState) -> RAGState:
         """Orion: clarify or emit READY TO RETRIEVE with refined query."""
         messages = list(state.get("messages") or [])
-        llm_messages = [SystemMessage(content=ORION_SYSTEM_PROMPT)] + messages
+        llm_messages = [SystemMessage(content=prompts.orion_system)] + messages
         response = llm.invoke(llm_messages)
         if isinstance(response, AIMessage):
             text = _extract_text_from_ai_message(response)
@@ -177,19 +191,14 @@ def build_rag_graph(
 
         context_text = "\n\n".join(doc.page_content for doc in docs)
         if context_text.strip():
-            system_instruction = (
-                "Use the following context to answer the user's question as accurately "
-                "as possible. If the context is insufficient, you may answer from your "
-                "general knowledge but indicate that the answer is not fully grounded "
-                "in the provided document."
-            )
+            system_instruction = prompts.rag_answer_with_context
         else:
-            system_instruction = (
-                "No relevant context could be retrieved from the document. Answer the "
-                "user's question as best as you can from your general knowledge, and "
-                "state clearly that the answer is not grounded in the document."
-            )
+            system_instruction = prompts.rag_answer_no_context
 
+        # We collapse the "question + context" into a single user message to keep
+        # provider behavior consistent: some chat backends treat separate messages
+        # (system+user+user) differently for safety/formatting. This form keeps
+        # the state graph stable across providers.
         prompt = (
             f"{system_instruction}\n\nQuestion:\n{query}\n\nContext:\n{context_text}"
         )

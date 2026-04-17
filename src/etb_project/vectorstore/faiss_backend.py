@@ -1,3 +1,19 @@
+"""FAISS persistence backend for ETB dual vector stores.
+
+The project maintains *two* dense indices:
+- **text**: chunk-level text content
+- **captions**: image-caption documents
+
+Why a backend abstraction:
+- Keeps persistence/load behavior (folder layout, manifest validation) in one place.
+- Makes it possible to add other vector DBs later without rewriting the indexing API.
+
+Compatibility note:
+- LangChain's `FAISS.load_local` signature has changed across versions. We use
+  signature inspection to pass only supported arguments while still enabling
+  deserialization for locally persisted indices.
+"""
+
 from __future__ import annotations
 
 import inspect
@@ -20,11 +36,22 @@ class FaissDualVectorStoreBackend(DualVectorStoreBackend):
 
     def is_ready(self, root: Path) -> bool:
         manifest_path = root / self.manifest_filename
-        return (
+        if not (
             manifest_path.exists()
             and (root / self.text_dirname).exists()
             and (root / self.captions_dirname).exists()
-        )
+        ):
+            return False
+        try:
+            manifest = IndexManifest.load(manifest_path)
+        except Exception:
+            return False
+        if manifest.sparse_backend:
+            sparse = root / "sparse"
+            for name in ("version.txt", "text_corpus.jsonl", "captions_corpus.jsonl"):
+                if not (sparse / name).is_file():
+                    return False
+        return True
 
     def persist(
         self,

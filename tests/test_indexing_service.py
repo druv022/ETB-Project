@@ -9,6 +9,10 @@ from langchain_core.embeddings import Embeddings
 
 from etb_project.document_processing import ImageCaptioner
 from etb_project.document_processing.processor import ChunkingConfig
+from etb_project.vectorstore.hierarchy_store import (
+    HIERARCHY_BACKEND_SQLITE_V1,
+    HIERARCHY_SCHEMA_VERSION,
+)
 from etb_project.vectorstore.indexing_service import (
     DEFAULT_EMBEDDING_MODEL_ID,
     append_to_and_persist_index_for_pdfs,
@@ -16,6 +20,16 @@ from etb_project.vectorstore.indexing_service import (
     build_and_persist_index_for_pdfs,
     build_dual_vectorstores_from_pdfs,
 )
+from etb_project.vectorstore.sparse_export import SPARSE_VERSION
+
+
+@pytest.fixture(autouse=True)
+def _noop_sparse_export(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Vectorstore mocks are not FAISS; skip JSONL export in unit tests."""
+    monkeypatch.setattr(
+        "etb_project.vectorstore.indexing_service.export_sparse_corpus_from_vectorstores",
+        lambda *a, **k: None,
+    )
 
 
 def test_build_and_persist_index_happy_path() -> None:
@@ -32,10 +46,19 @@ def test_build_and_persist_index_happy_path() -> None:
     backend = MagicMock()
     backend.backend_name = "faiss"
 
-    with patch(
-        "etb_project.vectorstore.indexing_service.process_pdf_to_vectorstores",
-        return_value=(text_vs, caption_vs),
-    ) as mock_process:
+    with (
+        patch(
+            "etb_project.vectorstore.indexing_service.process_pdf_to_hierarchical_text_and_caption_docs",
+            return_value=([], [], []),
+        ) as mock_process,
+        patch(
+            "etb_project.vectorstore.indexing_service.build_two_vectorstores",
+            return_value=(text_vs, caption_vs),
+        ),
+        patch(
+            "etb_project.vectorstore.indexing_service.replace_all_hierarchy",
+        ),
+    ):
         text_store, caption_store = build_and_persist_index(
             pdf_path=pdf_path,
             output_dir=output_dir,
@@ -60,6 +83,10 @@ def test_build_and_persist_index_happy_path() -> None:
     assert call_kwargs["manifest"].chunk_overlap == 10
     assert call_kwargs["manifest"].embedding_model_id == DEFAULT_EMBEDDING_MODEL_ID
     assert call_kwargs["manifest"].created_at  # non-empty string
+    assert call_kwargs["manifest"].sparse_backend == "bm25"
+    assert call_kwargs["manifest"].sparse_version == SPARSE_VERSION
+    assert call_kwargs["manifest"].hierarchy_backend == HIERARCHY_BACKEND_SQLITE_V1
+    assert call_kwargs["manifest"].hierarchy_schema_version == HIERARCHY_SCHEMA_VERSION
 
 
 def test_build_and_persist_index_backend_name_fallback_to_faiss() -> None:
@@ -77,9 +104,18 @@ def test_build_and_persist_index_backend_name_fallback_to_faiss() -> None:
 
     backend = BackendWithoutName()
 
-    with patch(
-        "etb_project.vectorstore.indexing_service.process_pdf_to_vectorstores",
-        return_value=(text_vs, caption_vs),
+    with (
+        patch(
+            "etb_project.vectorstore.indexing_service.process_pdf_to_hierarchical_text_and_caption_docs",
+            return_value=([], [], []),
+        ),
+        patch(
+            "etb_project.vectorstore.indexing_service.build_two_vectorstores",
+            return_value=(text_vs, caption_vs),
+        ),
+        patch(
+            "etb_project.vectorstore.indexing_service.replace_all_hierarchy",
+        ),
     ):
         build_and_persist_index(
             pdf_path=pdf_path,
@@ -121,10 +157,10 @@ def test_build_dual_vectorstores_from_pdfs_builds_from_aggregated_docs() -> None
     # Sorted order should be: /some/a.pdf, /some/b.pdf
     with (
         patch(
-            "etb_project.vectorstore.indexing_service.process_pdf_to_text_and_caption_docs",
+            "etb_project.vectorstore.indexing_service.process_pdf_to_hierarchical_text_and_caption_docs",
             side_effect=[
-                (fake_text_docs_a, fake_caption_docs_a),
-                (fake_text_docs_b, fake_caption_docs_b),
+                (fake_text_docs_a, fake_caption_docs_a, []),
+                (fake_text_docs_b, fake_caption_docs_b, []),
             ],
         ) as mock_process,
         patch(
@@ -132,7 +168,7 @@ def test_build_dual_vectorstores_from_pdfs_builds_from_aggregated_docs() -> None
             return_value=(fake_text_vs, fake_caption_vs),
         ) as mock_build_two,
     ):
-        text_vs, caption_vs = build_dual_vectorstores_from_pdfs(
+        text_vs, caption_vs, _parents, _children = build_dual_vectorstores_from_pdfs(
             pdf_paths=pdf_paths,
             output_dir=output_dir,
             chunking_config=chunking_config,
@@ -170,8 +206,11 @@ def test_build_and_persist_index_for_pdfs_happy_path() -> None:
     with (
         patch(
             "etb_project.vectorstore.indexing_service.build_dual_vectorstores_from_pdfs",
-            return_value=(text_vs, caption_vs),
+            return_value=(text_vs, caption_vs, [], []),
         ) as mock_build,
+        patch(
+            "etb_project.vectorstore.indexing_service.replace_all_hierarchy",
+        ),
     ):
         build_and_persist_index_for_pdfs(
             pdf_paths=pdf_paths,
@@ -195,6 +234,8 @@ def test_build_and_persist_index_for_pdfs_happy_path() -> None:
     assert manifest.chunk_overlap == 10
     assert manifest.embedding_model_id == DEFAULT_EMBEDDING_MODEL_ID
     assert manifest.created_at  # non-empty string
+    assert manifest.hierarchy_backend == HIERARCHY_BACKEND_SQLITE_V1
+    assert manifest.hierarchy_schema_version == HIERARCHY_SCHEMA_VERSION
 
 
 def test_build_and_persist_index_for_pdfs_raises_when_empty() -> None:
@@ -229,9 +270,14 @@ def test_build_and_persist_index_for_pdfs_backend_name_fallback_to_faiss() -> No
 
     backend = BackendWithoutName()
 
-    with patch(
-        "etb_project.vectorstore.indexing_service.build_dual_vectorstores_from_pdfs",
-        return_value=(text_vs, caption_vs),
+    with (
+        patch(
+            "etb_project.vectorstore.indexing_service.build_dual_vectorstores_from_pdfs",
+            return_value=(text_vs, caption_vs, [], []),
+        ),
+        patch(
+            "etb_project.vectorstore.indexing_service.replace_all_hierarchy",
+        ),
     ):
         build_and_persist_index_for_pdfs(
             pdf_paths=pdf_paths,
@@ -326,6 +372,8 @@ def test_append_to_and_persist_index_for_pdfs_appends_when_ready() -> None:
     existing_manifest.embedding_model_id = DEFAULT_EMBEDDING_MODEL_ID
     existing_manifest.backend = "faiss"
     existing_manifest.pdf_path = "/some/old.pdf"
+    existing_manifest.hierarchy_schema_version = None
+    existing_manifest.hierarchy_backend = None
 
     embeddings = MagicMock()
 
@@ -403,6 +451,8 @@ def test_append_to_and_persist_index_for_pdfs_combines_when_old_pdf_path_empty()
     existing_manifest.embedding_model_id = DEFAULT_EMBEDDING_MODEL_ID
     existing_manifest.backend = "faiss"
     existing_manifest.pdf_path = "   "
+    existing_manifest.hierarchy_schema_version = None
+    existing_manifest.hierarchy_backend = None
 
     with (
         patch(
@@ -448,6 +498,8 @@ def test_append_to_and_persist_index_for_pdfs_raises_when_chunking_differs() -> 
     existing_manifest.embedding_model_id = DEFAULT_EMBEDDING_MODEL_ID
     existing_manifest.backend = "faiss"
     existing_manifest.pdf_path = "/some/old.pdf"
+    existing_manifest.hierarchy_schema_version = None
+    existing_manifest.hierarchy_backend = None
 
     embeddings = MagicMock()
 
@@ -486,6 +538,8 @@ def test_append_to_and_persist_index_for_pdfs_raises_when_embedding_model_differ
     existing_manifest.embedding_model_id = "some-other-embedding"
     existing_manifest.backend = "faiss"
     existing_manifest.pdf_path = "/some/old.pdf"
+    existing_manifest.hierarchy_schema_version = None
+    existing_manifest.hierarchy_backend = None
 
     with patch(
         "etb_project.vectorstore.indexing_service.IndexManifest.load",

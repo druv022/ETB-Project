@@ -1,3 +1,9 @@
+"""Ad-hoc PDF loader utility for local debugging.
+
+This is not used by the retriever/orchestrator runtime. It exists as a quick
+way to inspect how LangChain's PyPDFLoader parses a PDF (page text + metadata).
+"""
+
 import pprint
 
 from langchain_community.document_loaders import PyPDFLoader
@@ -5,6 +11,7 @@ from langchain_core.documents import Document
 
 
 def load_pdf(file_path: str) -> list[Document]:
+    """Load a PDF as page-level Documents (debug helper)."""
     loader = PyPDFLoader(file_path, mode="page", extract_images=True)
     return loader.load()  # type: ignore[no-any-return]
 

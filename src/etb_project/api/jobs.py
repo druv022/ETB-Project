@@ -1,4 +1,13 @@
-"""In-memory async index job tracking."""
+"""In-memory async index job tracking.
+
+Jobs exist to make indexing usable for larger PDFs:
+- The HTTP request can return quickly with a job id.
+- A background task performs the work and updates status.
+
+This is intentionally minimal and process-local (sufficient for docker-compose
+single-replica dev). If the retriever is ever run with multiple replicas, job
+state should move to a shared store.
+"""
 
 from __future__ import annotations
 
@@ -19,6 +28,8 @@ class IndexJob:
 
 
 class JobRegistry:
+    """Thread-safe registry of indexing jobs for a single process."""
+
     def __init__(self) -> None:
         self._jobs: dict[str, IndexJob] = {}
         self._lock = threading.Lock()

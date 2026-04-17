@@ -41,6 +41,14 @@ services:
       # ollama-python Client reads OLLAMA_HOST; LangChain also accepts base_url from these.
       - OLLAMA_HOST=http://ollama:11434
       - OLLAMA_BASE_URL=http://ollama:11434
+      # HyDE chat LLM (same variables as orchestrator; see src/etb_project/models.py)
+      - ETB_LLM_PROVIDER=${ETB_LLM_PROVIDER:-openai_compat}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://openrouter.ai/api/v1}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-${OPENROUTER_API_KEY:-}}
+      - OPENAI_MODEL=${OPENAI_MODEL:-nvidia/nemotron-3-super-120b-a12b:free}
+      - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0}
+      - OLLAMA_CHAT_MODEL=${OLLAMA_CHAT_MODEL:-qwen3.5:9b}
+      - OLLAMA_TEMPERATURE=${OLLAMA_TEMPERATURE:-0}
     env_file:
       - .env
     ports:
@@ -73,14 +81,15 @@ services:
     environment:
       - PYTHONPATH=/app/src
       - PYTHONUNBUFFERED=1
-      # Orchestrator -> Retriever
+      # Orchestrator -> Retriever (httpx read timeout; retrieval can exceed 60s with HyDE/embedding load)
       - RETRIEVER_BASE_URL=http://retriever:8000
+      - RETRIEVER_TIMEOUT_S=${RETRIEVER_TIMEOUT_S:-360}
       # LLM provider selection (see src/etb_project/models.py)
       - ETB_LLM_PROVIDER=${ETB_LLM_PROVIDER:-openai_compat}
       # OpenAI-compatible provider (use OpenRouter by setting OPENAI_BASE_URL)
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://openrouter.ai/api/v1}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-${OPENROUTER_API_KEY:-}}
-      - OPENAI_MODEL=${OPENAI_MODEL:-stepfun/step-3.5-flash}
+      - OPENAI_MODEL=${OPENAI_MODEL:-nvidia/nemotron-3-super-120b-a12b:free}
       - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0}
       # Ollama provider (optional)
       - OLLAMA_HOST=${OLLAMA_HOST:-}
@@ -88,6 +97,8 @@ services:
       - OLLAMA_CHAT_MODEL=${OLLAMA_CHAT_MODEL:-qwen3.5:9b}
       - OLLAMA_TEMPERATURE=${OLLAMA_TEMPERATURE:-0}
       - ORCH_RETRIEVER_K=${ORCH_RETRIEVER_K:-10}
+      # Optional LangSmith: LANGCHAIN_TRACING_V2, LANGCHAIN_API_KEY, LANGCHAIN_PROJECT
+      # Optional ETB tracing toggles (defaults on): ETB_TRACE_ENABLED, ETB_TRACE_LOG_QUERIES
       - ORCH_SESSION_TTL_SECONDS=${ORCH_SESSION_TTL_SECONDS:-7200}
     env_file:
       - .env

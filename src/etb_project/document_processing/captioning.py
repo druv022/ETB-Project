@@ -26,23 +26,22 @@ from typing import Any, Final
 from openai import OpenAI, OpenAIError
 
 from etb_project.config import load_config
+from etb_project.prompts_config import load_prompts
 
 logger = logging.getLogger(__name__)
 
 _MAX_ERROR_BODY_LOG: Final[int] = 2000
 
-SYSTEM_PROMPT: Final[str] = (
-    "You are an expert technical document assistant. "
-    "Given an embedded image extracted from a PDF, produce a concise, "
-    "fact-focused summary of the image that will help a retrieval system understand what the image contains."
-    "The summary should also be reasonable, understandable and complete rather than only visual descriptions of the image."
-    "Respond with just the summary text. Do not include any other text or formatting."
-)
-
-USER_PROMPT: Final[str] = "Summarize this image in one paragraph."
+# Re-exported for ``from ... import SYSTEM_PROMPT``; captioning uses load_prompts() per call
+# so edits to prompts.yaml take effect without relying on these import-time snapshots.
+_pp = load_prompts()
+SYSTEM_PROMPT = _pp.image_caption_system
+USER_PROMPT = _pp.image_caption_user
 
 
 def _image_data_url_for_path(path: Path) -> str:
+    # OpenAI-compatible vision APIs accept images as a URL or as a data URL.
+    # Using a data URL keeps this self-contained (no separate asset hosting).
     image_bytes = path.read_bytes()
     image_b64 = base64.b64encode(image_bytes).decode("utf-8")
     ext = path.suffix.lstrip(".").lower()
@@ -158,21 +157,24 @@ class ChatCompletionImageCaptioner(ImageCaptioner):
         api_key = self.api_key or os.environ.get(self.api_key_env)
         model = self.model or self._default_model()
         if not api_key or not model:
+            # Captioning is optional; if the user didn't configure credentials/model,
+            # we degrade to "no captions" rather than failing indexing.
             return None
 
         data_url = _image_data_url_for_path(path)
         client = self._build_client(api_key)
         label = self._provider_label()
+        cap = load_prompts()
 
         try:
             response = client.chat.completions.create(
                 model=model,
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": cap.image_caption_system},
                     {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": USER_PROMPT},
+                            {"type": "text", "text": cap.image_caption_user},
                             {
                                 "type": "image_url",
                                 "image_url": {"url": data_url},

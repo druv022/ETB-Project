@@ -1,3 +1,5 @@
+"""Request/response models for the Orchestrator HTTP API (chat, health, errors)."""
+
 from __future__ import annotations
 
 from typing import Any, Literal

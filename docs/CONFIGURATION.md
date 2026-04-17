@@ -6,7 +6,19 @@ This page documents:
 
 - where config is loaded from
 - the core settings in `src/config/settings.yaml`
+- application LLM prompts in `src/config/prompts.yaml`
 - environment variables used by the project
+
+## LLM prompts: `src/config/prompts.yaml`
+
+The main package loads all **application** chat/vision prompts (Orion gate, RAG answer instructions, HyDE, LLM rerank scoring, image captioning) from this file via `etb_project.prompts_config.load_prompts()`.
+
+Resolution:
+
+1. If **`ETB_PROMPTS`** is set, use that path (absolute or relative).
+2. Otherwise use **`prompts.yaml`** in the **same directory** as the resolved settings YAML (`ETB_CONFIG` or the default `src/config/settings.yaml`).
+
+Reporting utilities under `tools/data_generation/report_generation/` use **only** `tools/data_generation/report_generation/llm_config.yaml` for narrative/evaluation/rewrite prompts; they do not read `src/config/prompts.yaml`.
 
 ## Config file: `src/config/settings.yaml`
 
@@ -86,6 +98,8 @@ This project uses environment variables for:
 
 - `ETB_CONFIG`
   - Path to a YAML file to use instead of the default `src/config/settings.yaml` resolution.
+- `ETB_PROMPTS`
+  - Optional. Path to `prompts.yaml` for application LLM strings. If unset, `prompts.yaml` next to the resolved `ETB_CONFIG` / default settings file is used.
 
 ### CLI (`python -m etb_project.main`)
 
@@ -110,8 +124,12 @@ Local vs remote retrieval (overrides default **local** dual-FAISS load):
 
 - `RETRIEVER_BASE_URL`
   - Base URL for the retriever API (required for orchestrator; in Compose it’s `http://retriever:8000`).
+- `RETRIEVER_TIMEOUT_S`
+  - HTTP **read** timeout in seconds for the orchestrator’s `POST /v1/retrieve` client (default `60` outside Compose). Docker Compose sets default `180` for the orchestrator service so slow embedding or HyDE runs are less likely to hit `httpx.ReadTimeout`. Increase further if you still see timeouts.
 - `ORCH_RETRIEVER_K`
   - Default `k` used by `POST /v1/chat` when the request body doesn’t specify `k`.
+- `ORCH_RETRIEVER_STRATEGY`
+  - Optional. When set to `dense` or `hybrid`, forwarded as `strategy` on `POST /v1/retrieve`. When unset, the retriever uses its default (`ETB_RETRIEVE_STRATEGY`).
 - `ORCH_SESSION_TTL_SECONDS`
   - Session TTL for in-memory chat history.
 - `ORCH_CORS_ALLOW_ORIGINS`
@@ -125,6 +143,8 @@ LLM provider selection:
 
 - `ETB_LLM_PROVIDER`
   - `openai_compat` (default) or `ollama`.
+- `ETB_LLM_REQUEST_TIMEOUT_S`
+  - Per-request timeout in seconds for **OpenAI-compatible** chat calls (`ChatOpenAI.request_timeout`, default **300**). The RAG graph may run **Orion** then **answer** (two LLM calls when `ETB_ORION_CLARIFY` is on); slow or remote providers (e.g. OpenRouter) can hit HTTP **524** upstream timeouts—increase this value, disable Orion (`ETB_ORION_CLARIFY=0`), or switch to a faster model / local Ollama.
 
 OpenAI-compatible chat backend (also used for OpenRouter):
 
@@ -175,6 +195,39 @@ Limits:
 - `ETB_MAX_UPLOAD_FILES` (default: 20 files per request)
 - `ETB_MAX_RETRIEVE_BODY_BYTES` (default: 65536)
 - `ETB_RATE_LIMIT_PER_MINUTE` (default: 120)
+
+### LangSmith tracing (orchestrator + retriever + CLI)
+
+ETB-owned tracing (``@traceable`` spans, RunnableConfig metadata, retrieval pipeline summaries) is **on by default** when env vars are unset. LangChain’s global tracer still needs ``LANGCHAIN_API_KEY`` to upload runs to LangSmith.
+
+**Boot environment (defaults when unset = on / enabled):**
+
+- `LANGCHAIN_TRACING_V2` — default **true** (export LangGraph/LangChain runs; turning **off** may require a **process restart**).
+- `LANGCHAIN_API_KEY` — LangSmith API key (required for uploads).
+- `LANGCHAIN_PROJECT`, `LANGCHAIN_ENDPOINT` — optional LangSmith project / endpoint.
+- `ETB_TRACE_ENABLED` — default **true** (gates ETB ``@traceable`` spans and graph ``RunnableConfig`` metadata).
+- `ETB_TRACE_LOG_QUERIES` — default **true** (truncated query in traces); set **false** for length + hash prefix only.
+
+**Runtime HTTP (no redeploy for ETB flags):**
+
+Both the **Orchestrator** and **Retriever** expose `GET /v1/tracing` and `PUT /v1/tracing` with a JSON body. Only fields you send are updated (partial PUT).
+
+```bash
+# Orchestrator (example port 8001)
+curl -s -X PUT "http://localhost:8001/v1/tracing" \
+  -H "Content-Type: application/json" \
+  -d '{"log_queries": false}'
+```
+
+```bash
+# Retriever API (example port 8000); when RETRIEVER_API_KEY is set, send Bearer:
+curl -s -X PUT "http://localhost:8000/v1/tracing" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <RETRIEVER_API_KEY>" \
+  -d '{"enabled": false}'
+```
+
+The orchestrator **PUT** is open by default (treat as **dev-only**); use a reverse proxy or firewall in production.
 
 ### Captioning secrets
 

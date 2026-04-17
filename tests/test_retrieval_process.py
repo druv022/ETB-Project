@@ -196,8 +196,8 @@ def test_process_pdf_to_vectorstores_delegates_to_dual_builder() -> None:
 
     with (
         patch(
-            "etb_project.retrieval.process.process_pdf_to_text_and_caption_docs",
-            return_value=(fake_text_docs, fake_caption_docs),
+            "etb_project.retrieval.process.process_pdf_to_hierarchical_text_and_caption_docs",
+            return_value=(fake_text_docs, fake_caption_docs, []),
         ) as mock_extract,
         patch(
             "etb_project.retrieval.process.build_two_vectorstores",

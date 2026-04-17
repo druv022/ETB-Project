@@ -1,3 +1,14 @@
+"""Build the synthetic retail SQLite DB, CSV export, and SQL dump for tooling.
+
+Reads ``Ed_Data/walmart_retail_sales_database.csv``, generates multi-year
+transaction rows with deterministic randomness, writes ``transactions.db``,
+``transactions_JanFeb_2020.csv`` (append-friendly batches), and
+``transaction_database_5yrs_full.sql`` via ``sqlite3`` dump.
+
+Run from repo root with the project env; this script is **not** part of the
+``etb_project`` runtime—only the reporting/data-generation workflow uses it.
+"""
+
 import csv
 import os
 import random
@@ -23,7 +34,7 @@ def main():
     print("Building product map...")
     product_map: dict[int, dict[str, object]] = {}
     categories: dict[str, float] = {}
-    rng = random.Random(42)
+    rng = random.Random(42)  # reproducible synthetic rows for stable demos/tests
 
     for row in source_rows:
         prod_id = int(row["Product_ID"])

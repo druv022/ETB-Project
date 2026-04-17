@@ -1,3 +1,20 @@
+"""Model/provider construction for ETB-project.
+
+This module centralizes the creation of:
+- **Chat LLMs** used by the orchestrator (and retriever-side features like HyDE).
+- **Embedding models** used by the retriever and indexing pipeline.
+
+Why centralize:
+- Keeps provider-specific environment variables in one place.
+- Avoids importing provider SDKs throughout the codebase.
+- Makes it easy to swap providers in Docker/CI by changing env vars only.
+
+Implementation detail:
+- ``FaissCompatibleEmbeddings`` normalizes embedding batch shapes because LangChain
+  FAISS expects a 2D matrix; some backends return a 1D vector for single-item
+  batches.
+"""
+
 from __future__ import annotations
 
 import os
@@ -90,10 +107,19 @@ class OpenAICompatibleProvider(ChatModelProvider):
     name = "openai_compat"
 
     def build_chat_model(self) -> BaseChatModel:
-        model = os.environ.get("OPENAI_MODEL", "stepfun/step-3.5-flash").strip()
+        model = os.environ.get(
+            "OPENAI_MODEL", "nvidia/nemotron-3-super-120b-a12b:free"
+        ).strip()
         temperature = float(os.environ.get("OPENAI_TEMPERATURE", "0"))
 
         kwargs: dict[str, Any] = {"model": model, "temperature": temperature}
+
+        # httpx read timeout for each LLM request (Orion + answer; OpenRouter can be slow).
+        req_to = os.environ.get("ETB_LLM_REQUEST_TIMEOUT_S", "").strip()
+        if req_to:
+            kwargs["request_timeout"] = float(req_to)
+        else:
+            kwargs["request_timeout"] = 300.0
 
         api_key = os.environ.get("OPENAI_API_KEY")
         if api_key and api_key.strip():

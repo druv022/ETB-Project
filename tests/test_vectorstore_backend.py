@@ -8,6 +8,7 @@ import pytest
 
 from etb_project.vectorstore.faiss_backend import FaissDualVectorStoreBackend
 from etb_project.vectorstore.manifest import IndexManifest
+from etb_project.vectorstore.sparse_export import SPARSE_VERSION
 
 
 def test_index_manifest_roundtrip(tmp_path: Path) -> None:
@@ -48,6 +49,23 @@ def test_index_manifest_load_fallback_created_at(tmp_path: Path) -> None:
 
 def test_faiss_backend_is_ready_false_initial(tmp_path: Path) -> None:
     backend = FaissDualVectorStoreBackend()
+    assert not backend.is_ready(tmp_path)
+
+
+def test_faiss_backend_is_ready_false_when_sparse_missing(tmp_path: Path) -> None:
+    backend = FaissDualVectorStoreBackend()
+    (tmp_path / "text").mkdir(parents=True)
+    (tmp_path / "captions").mkdir(parents=True)
+    manifest = IndexManifest.create(
+        backend="faiss",
+        pdf_path="/x.pdf",
+        chunk_size=100,
+        chunk_overlap=0,
+        embedding_model_id="e",
+        sparse_backend="bm25",
+        sparse_version=SPARSE_VERSION,
+    )
+    manifest.save(tmp_path / "manifest.json")
     assert not backend.is_ready(tmp_path)
 
 

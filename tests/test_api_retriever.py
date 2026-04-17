@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from etb_project.api.app import create_app
 from etb_project.api.state import _serialize_metadata
+from etb_project.retrieval.exceptions import HybridSparseUnavailableError
 
 
 @pytest.fixture
@@ -150,6 +151,20 @@ def test_job_not_found(client: TestClient) -> None:
     r = client.get("/v1/jobs/00000000-0000-0000-0000-000000000000")
     assert r.status_code == 404
     assert r.json()["code"] == "JOB_NOT_FOUND"
+
+
+def test_retrieve_sparse_unavailable_returns_503(
+    tmp_settings_yaml: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ETB_CONFIG", str(tmp_settings_yaml))
+    with patch(
+        "etb_project.api.state.RetrieverServiceState.retrieve",
+        side_effect=HybridSparseUnavailableError("no sparse"),
+    ):
+        with TestClient(create_app()) as client:
+            r = client.post("/v1/retrieve", json={"query": "q"})
+    assert r.status_code == 503
+    assert r.json()["code"] == "SPARSE_INDEX_UNAVAILABLE"
 
 
 def test_retrieve_response_schema_contract(

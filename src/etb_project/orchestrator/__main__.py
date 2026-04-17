@@ -10,6 +10,7 @@ import uvicorn
 def main() -> None:
     host = os.environ.get("ETB_ORCH_HOST", "0.0.0.0")  # nosec B104
     port = int(os.environ.get("PORT", os.environ.get("ETB_ORCH_PORT", "8001")))
+    # factory=True: fresh FastAPI app per process (lifespan + settings reload).
     uvicorn.run(
         "etb_project.orchestrator.app:create_app",
         factory=True,

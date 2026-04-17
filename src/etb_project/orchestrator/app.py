@@ -25,6 +25,7 @@ from starlette.middleware.cors import CORSMiddleware
 from etb_project.graph_rag import build_rag_graph
 from etb_project.models import get_chat_llm
 from etb_project.orchestrator.exceptions import OrchestratorAPIError
+from etb_project.orchestrator.llm_provider_errors import map_provider_invoke_error
 from etb_project.orchestrator.schemas import (
     ChatRequest,
     ChatResponse,
@@ -43,6 +44,8 @@ from etb_project.orchestrator.settings import (
     load_orchestrator_settings,
 )
 from etb_project.retrieval import RemoteRetriever
+from etb_project.tracing.langsmith_config import build_runnable_config_for_orchestrator
+from etb_project.tracing.routes import build_tracing_router
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +115,12 @@ def _build_retriever(settings: OrchestratorSettings, k: int) -> RemoteRetriever:
             "CONFIG_ERROR",
             "RETRIEVER_BASE_URL is not configured for the orchestrator.",
         )
-    return RemoteRetriever(settings.retriever_base_url, k=k, timeout_s=60.0)
+    return RemoteRetriever(
+        settings.retriever_base_url,
+        k=k,
+        timeout_s=settings.retriever_timeout_s,
+        strategy=settings.retriever_strategy,
+    )
 
 
 def create_app() -> FastAPI:
@@ -137,6 +145,7 @@ def create_app() -> FastAPI:
         description="Chat orchestration service (LangGraph RAG + remote retriever).",
         lifespan=lifespan,
     )
+    app.include_router(build_tracing_router("etb-orchestrator"))
     app.add_middleware(RequestLoggingMiddleware)
 
     # CORS is optional; for docker-compose local dev it can stay unset.
@@ -256,9 +265,25 @@ def create_app() -> FastAPI:
         graph = build_rag_graph(llm=llm, retriever=retriever)
 
         prior = deserialize_messages(sessions.get_messages(body.session_id))
-        result: dict[str, Any] = graph.invoke(
-            {"query": body.message, "messages": prior}
+        run_config = build_runnable_config_for_orchestrator(
+            retriever_base_url=settings.retriever_base_url or None,
+            orch_retriever_strategy=settings.retriever_strategy,
+            payload_strategy=settings.retriever_strategy,
+            retriever_k=k,
+            session_id=body.session_id,
+            request_id=str(rid) if rid is not None else None,
         )
+        invoke_kw: dict[str, Any] = {"query": body.message, "messages": prior}
+        try:
+            if run_config is not None:
+                result = graph.invoke(invoke_kw, config=run_config)
+            else:
+                result = graph.invoke(invoke_kw)
+        except Exception as exc:
+            mapped = map_provider_invoke_error(exc)
+            if mapped is not None:
+                raise mapped from exc
+            raise
         answer = (result.get("answer") or "").strip()
         if not answer:
             raise OrchestratorAPIError(

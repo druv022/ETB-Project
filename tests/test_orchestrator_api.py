@@ -14,7 +14,7 @@ from etb_project.orchestrator.app import create_app
 def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv("RETRIEVER_BASE_URL", "http://retriever:8000")
     monkeypatch.setenv("ETB_LLM_PROVIDER", "openai_compat")
-    monkeypatch.setenv("OPENAI_MODEL", "stepfun/step-3.5-flash")
+    monkeypatch.setenv("OPENAI_MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
     with TestClient(create_app()) as c:
@@ -30,7 +30,7 @@ def test_health(client: TestClient) -> None:
 def test_ready_requires_retriever_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("RETRIEVER_BASE_URL", raising=False)
     monkeypatch.setenv("ETB_LLM_PROVIDER", "openai_compat")
-    monkeypatch.setenv("OPENAI_MODEL", "stepfun/step-3.5-flash")
+    monkeypatch.setenv("OPENAI_MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
     with TestClient(create_app()) as c:
         r = c.get("/v1/ready")
         assert r.status_code == 200
@@ -44,7 +44,7 @@ def test_chat_happy_path_returns_answer_and_sources(client: TestClient) -> None:
 
     def fake_build_graph(*args: object, **kwargs: object) -> object:
         class G:
-            def invoke(self, _state: dict) -> dict:
+            def invoke(self, _state: dict, **_kw: object) -> dict:
                 return {
                     "answer": "hello",
                     "context_docs": [mock_doc],
@@ -73,7 +73,7 @@ def test_chat_clarify_phase_empty_sources(client: TestClient) -> None:
 
     def fake_build_graph(*args: object, **kwargs: object) -> object:
         class G:
-            def invoke(self, _state: dict) -> dict:
+            def invoke(self, _state: dict, **_kw: object) -> dict:
                 return {
                     "answer": "Which quarter?",
                     "context_docs": [],
@@ -100,7 +100,7 @@ def test_chat_clarify_phase_empty_sources(client: TestClient) -> None:
 def test_chat_returns_502_on_empty_answer(client: TestClient) -> None:
     def fake_build_graph(*args: object, **kwargs: object) -> object:
         class G:
-            def invoke(self, _state: dict) -> dict:
+            def invoke(self, _state: dict, **_kw: object) -> dict:
                 return {"answer": "   "}
 
         return G()
@@ -113,12 +113,32 @@ def test_chat_returns_502_on_empty_answer(client: TestClient) -> None:
     assert r.json()["code"] == "EMPTY_ANSWER"
 
 
+def test_chat_returns_502_on_llm_provider_524(client: TestClient) -> None:
+    """LangChain raises ValueError with provider error dict (e.g. OpenRouter 524)."""
+
+    def fake_build_graph(*args: object, **kwargs: object) -> object:
+        class G:
+            def invoke(self, _state: dict, **_kw: object) -> dict:
+                raise ValueError({"message": "Provider returned error", "code": 524})
+
+        return G()
+
+    with patch(
+        "etb_project.orchestrator.app.build_rag_graph", side_effect=fake_build_graph
+    ):
+        r = client.post("/v1/chat", json={"session_id": "s1", "message": "q"})
+    assert r.status_code == 502
+    body = r.json()
+    assert body["code"] == "LLM_UPSTREAM_TIMEOUT"
+    assert "524" in body["message"]
+
+
 def test_assets_proxy_forwards_authorization_header(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("RETRIEVER_BASE_URL", "http://retriever:8000")
     monkeypatch.setenv("ETB_LLM_PROVIDER", "openai_compat")
-    monkeypatch.setenv("OPENAI_MODEL", "stepfun/step-3.5-flash")
+    monkeypatch.setenv("OPENAI_MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
 

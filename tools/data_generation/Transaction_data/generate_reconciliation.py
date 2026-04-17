@@ -1,3 +1,11 @@
+"""Reconciliation report between source retail CSV and expected monthly rollups.
+
+Compares ``Ed_Data/walmart_retail_sales_database.csv`` against definitions in
+``transaction_database_5yrs_full.sql`` (or alternate SQL name) and writes
+``reconciliation_report.csv`` plus a text summary. Used to validate synthetic
+data consistency—not imported by the main app.
+"""
+
 import csv
 import os
 from decimal import Decimal, getcontext

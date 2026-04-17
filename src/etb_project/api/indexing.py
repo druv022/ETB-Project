@@ -1,4 +1,15 @@
-"""Run PDF indexing for the HTTP API (same pipeline as ``document_processor_cli``)."""
+"""Run PDF indexing for the HTTP API.
+
+The retriever service can build/update its own indices via ``POST /v1/index``.
+This module adapts the existing indexing pipeline (used by
+``document_processor_cli``) to run inside the API process.
+
+Key constraints (why it looks slightly "low level"):
+- The API must update on-disk indices *and then* reload in-memory FAISS stores
+  atomically from the perspective of concurrent retrieval requests.
+- We therefore reuse the state object's re-entrant lock across the entire
+  persist + reload section.
+"""
 
 from __future__ import annotations
 
@@ -25,6 +36,11 @@ logger = logging.getLogger(__name__)
 
 
 def _captioner_from_config() -> ImageCaptioner | None:
+    """Enable image captioning only when configured.
+
+    Captioning can be expensive and requires an external API key; the default is
+    intentionally "off" unless a model is configured in YAML.
+    """
     cfg = load_config()
     if cfg.openrouter_image_caption_model:
         return OpenRouterImageCaptioner()
@@ -62,6 +78,9 @@ def run_index_pdfs(
     captioner = _captioner_from_config()
     embeddings = get_embeddings()
 
+    # Hold the shared lock across persist + reload so retrieval can't read a
+    # partially written index. The lock is re-entrant (RLock) so this is safe
+    # even if called by code that already holds it.
     with state._lock:
         append_to_and_persist_index_for_pdfs(
             pdf_paths=pdf_paths,

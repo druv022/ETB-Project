@@ -60,7 +60,7 @@ conda run -n etb pytest
 
 ## Quickstart
 
-1. Create a `.env` (e.g. `OPENROUTER_API_KEY=...` for the orchestrator’s OpenAI-compatible client) and configure `src/config/settings.yaml`, or set `ETB_CONFIG` to another YAML path.
+1. Create a `.env` (e.g. `OPENROUTER_API_KEY=...` for the orchestrator’s OpenAI-compatible client) and configure `src/config/settings.yaml`, or set `ETB_CONFIG` to another YAML path. Application LLM prompts (Orion, RAG answers, HyDE, LLM rerank, image captioning) live in `src/config/prompts.yaml`; set **`ETB_PROMPTS`** to override that file path. Report-generation prompts under `tools/` are separate and stay in `tools/data_generation/report_generation/llm_config.yaml` (see [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)).
 
 2. Start everything (UI + orchestrator + retriever + Ollama) with Docker:
 
@@ -77,7 +77,7 @@ The repo ships a **standalone retriever HTTP API** (retrieve + index PDFs). The 
 **Docker note (Sources / images):** The retriever stores extracted PDF images under `ETB_DOCUMENT_OUTPUT_DIR` (Compose sets this to `/app/data/document_output` on the shared `etb_data` volume). The Streamlit UI loads them via the orchestrator at `GET /v1/assets/...`. If you set `RETRIEVER_API_KEY` on the retriever, set the same value in the UI environment (e.g. in `.env` used by Compose) as `RETRIEVER_API_KEY` or `ORCHESTRATOR_ASSET_BEARER_TOKEN` so image requests are authorized.
 
 For other run modes (CLI, provider switching, health checks, etc.), see [`docs/APP_RUN_MODES.md`](docs/APP_RUN_MODES.md).
-Compose starts **Ollama** (pulls the embedding model automatically), then the **retriever** once Ollama is healthy.
+Compose starts **Ollama** (pulls the embedding model automatically), then the **retriever** once Ollama is healthy. The orchestrator uses **`RETRIEVER_TIMEOUT_S`** (default **360** seconds in Compose) for calls to the retriever; override in `.env` if retrieval still times out. For **OpenRouter** or other remote chat APIs, **`ETB_LLM_REQUEST_TIMEOUT_S`** (default **300** seconds) sets the LLM client timeout; if you see **HTTP 524** / provider timeout errors, try **`ETB_ORION_CLARIFY=0`** (one fewer LLM call before retrieval), a faster model, or local **`ETB_LLM_PROVIDER=ollama`**.
 
 - **Check health**:
 
@@ -85,6 +85,15 @@ Compose starts **Ollama** (pulls the embedding model automatically), then the **
 curl http://localhost:8000/v1/health
 curl http://localhost:8000/v1/ready
 ```
+
+- **LangSmith / tracing toggles** (defaults on; see [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)):
+
+```bash
+curl -s http://localhost:8001/v1/tracing
+curl -s -X PUT http://localhost:8001/v1/tracing -H "Content-Type: application/json" -d '{"log_queries":false}'
+```
+
+Set `LANGCHAIN_API_KEY` (and optionally `LANGCHAIN_PROJECT`) for LangSmith uploads.
 
 - **Use the RAG orchestrator against the retriever**:
 
@@ -124,7 +133,8 @@ ETB-Project/
 ├── requirements-dev.txt
 ├── src/
 │   ├── config/
-│   │   └── settings.yaml     # Primary YAML (see docs/CONFIGURATION.md)
+│   │   ├── settings.yaml     # Primary YAML (see docs/CONFIGURATION.md)
+│   │   └── prompts.yaml      # Application LLM prompts (Orion, RAG, HyDE, rerank, captions)
 │   └── etb_project/          # Main package (`pip install -e .`)
 │       ├── api/              # Retriever FastAPI
 │       ├── orchestrator/       # Orchestrator FastAPI (chat + asset proxy)
@@ -143,6 +153,8 @@ ETB-Project/
 ```
 
 For a fuller component diagram and boundaries, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+Planned retriever enhancements (BM25, HyDE, hierarchy, ensemble + rerank) are specified under [`docs/plans/`](docs/plans/README.md).
 
 ## Contributing
 

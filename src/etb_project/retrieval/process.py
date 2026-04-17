@@ -1,3 +1,15 @@
+"""Low-level FAISS construction and dual-index helpers for indexing.
+
+This module bridges document processing output (chunked ``Document`` lists) to
+LangChain ``FAISS`` stores. It applies the same embedding-shape normalization as
+:func:`etb_project.models._normalize_embed_documents_for_faiss` because some
+code paths build FAISS directly without going through ``FaissCompatibleEmbeddings``.
+
+Keep in sync with:
+- ``etb_project.models._normalize_embed_documents_for_faiss`` (2D stacking)
+- ``vectorstore.indexing_service`` (persisted dual build/append)
+"""
+
 import pprint
 from pathlib import Path
 
@@ -12,7 +24,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from etb_project.document_processing import ImageCaptioner
 from etb_project.document_processing.processor import (
     ChunkingConfig,
-    process_pdf_to_text_and_caption_docs,
+    process_pdf_to_hierarchical_text_and_caption_docs,
 )
 from etb_project.models import _normalize_embed_documents_for_faiss
 from etb_project.models import get_ollama_embedding_model as get_embedding_model
@@ -50,6 +62,7 @@ def store_documents(documents: list[Document], embeddings: Embeddings) -> FAISS:
     batch cannot become a 1D array (which breaks FAISS).
     """
     if not documents:
+        # Empty store: still need a valid index dimension for downstream .add().
         embedding_dim = len(embeddings.embed_query("Hello, world!"))
         index = faiss.IndexFlatL2(embedding_dim)
         return FAISS(
@@ -155,12 +168,14 @@ def process_pdf_to_vectorstores(
     image_captioner: ImageCaptioner | None = None,
 ) -> tuple[FAISS, FAISS]:
     """End-to-end dual-index pipeline for standalone processing."""
-    text_docs, caption_docs = process_pdf_to_text_and_caption_docs(
-        pdf_path=pdf_path,
-        output_dir=output_dir,
-        chunking_config=chunking_config,
-        image_captioner=image_captioner,
-        asset_path_root=Path(output_dir),
+    text_docs, caption_docs, _parents = (
+        process_pdf_to_hierarchical_text_and_caption_docs(
+            pdf_path=pdf_path,
+            output_dir=output_dir,
+            chunking_config=chunking_config,
+            image_captioner=image_captioner,
+            asset_path_root=Path(output_dir),
+        )
     )
     return build_two_vectorstores(text_docs, caption_docs)
 

@@ -1,3 +1,10 @@
+"""ReportLab helpers for executive-style PDFs in the reporting toolkit.
+
+Complements ``pdf_utils.py`` (Matplotlib ``PdfPages``) with flowables, tables,
+and multi-page layouts. Used only under ``tools/data_generation/``; not part
+of the production RAG stack.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence

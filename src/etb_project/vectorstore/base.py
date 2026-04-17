@@ -1,3 +1,14 @@
+"""Backend abstraction for persisted dual vector stores.
+
+The indexing pipeline and retriever runtime treat "the vector store" as two
+coordinated indices:
+- text chunks
+- image-caption documents
+
+This interface keeps persistence/load checks behind a single abstraction so the
+rest of the codebase doesn't depend on FAISS-specific layout details.
+"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

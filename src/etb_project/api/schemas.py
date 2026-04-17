@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -15,7 +15,27 @@ class RetrieveRequest(BaseModel):
         default=None,
         ge=1,
         le=100,
-        description="Top-k per sub-retriever; merged total may be up to 2*k before dedup.",
+        description=(
+            "Final number of child-level chunks after ensemble fusion and reranking. "
+            "With hierarchical parent expansion, the response may contain fewer chunks "
+            "than k after collapsing to unique parents."
+        ),
+    )
+    strategy: Literal["dense", "hybrid"] | None = Field(
+        default=None,
+        description="Retrieval strategy; omit to use ETB_RETRIEVE_STRATEGY (default dense).",
+    )
+    reranker: Literal["off", "cosine", "cross_encoder", "llm"] | None = Field(
+        default=None,
+        description="Reranker backend; omit to use ETB_RERANKER.",
+    )
+    hyde_mode: Literal["off", "replace", "fuse"] | None = Field(
+        default=None,
+        description="HyDE dense heads; omit to use ETB_HYDE_MODE (default off).",
+    )
+    expand: bool | None = Field(
+        default=None,
+        description="Hierarchical parent expansion; omit to use ETB_HIER_EXPAND_DEFAULT when hierarchy index exists.",
     )
 
 

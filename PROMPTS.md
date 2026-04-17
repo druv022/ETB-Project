@@ -124,3 +124,31 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-03-31**: `The source name is confusing: 1. f411370fd13b44fbb0c18db63207e351_pdf_with_image.pdf • p.1/1 — Provide only the necessary information. The first part is unnecessary for the user.` (Context: add `display_name_for_source_file` in `ui/asset_paths.py` to strip retriever upload prefix `{uuid.hex}_`; use in Streamlit `_format_source_header`; tests in `test_ui_asset_paths.py`.)
 
 - **2026-03-31**: `Orion pre-retrieval clarification (conditional LangGraph) — implement the plan; use conda etb env.` (Context: add `orchestrator/prompts.py`, `orion_parse.py`, `session_messages.py`; extend `graph_rag.py` with `orion_gate` and conditional edges; orchestrator chat `phase` + message serialization; `ETB_ORION_CLARIFY`; CLI/studio `enable_orion_gate=False`; tests and docs. Run `conda run -n etb pytest`.)
+
+- **2026-03-31**: `Retrieval technique plan documents (four files) — Implement the plan as specified...` (Context: add `docs/plans/` specs for BM25, HyDE, hierarchical retrieval, and ensemble+rerank pipeline per meta-plan; `docs/plans/README.md`; index link from `docs/README.md`; do not edit `.cursor/plans` file.)
+
+- **2026-04-01**: `Update the plan docs/plans/retrieval-keyword-bm25.md instead of creating separate file.` (Context: merge gap-analysis items into the BM25 plan—prerequisite ensemble pipeline, non-goals/local CLI, RRF cross-ref, doc_id vs fusion key, manifest on append, readiness/corrupt sparse/settings, atomicity, empty caption head, HTTP contract migration, orchestrator default, k_fetch limits.)
+
+- **2026-04-01**: `use conda etb env` (Context: run pytest with `conda run -n etb`; fix circular import by lazy-exporting `create_app` in `etb_project.api.__init__` so `pipeline` → `api.schemas` does not eagerly import `app` → `state` → `pipeline`; 161 tests passed.)
+
+- **2026-04-01**: `Implement @docs/plans/retrieval-hyde.md` (Context: HyDE in retriever API — `hyde_mode` on `RetrieveRequest`, `ETB_HYDE_MODE` / `ETB_HYDE_MAX_TOKENS`, `retrieval/hyde.py` + `hyde_prompts.py`, dense heads in `pipeline.py` with RRF order, BM25/rerank unchanged on user query, `RemoteRetriever` forwards `hyde_mode`, retriever Compose LLM env, tests and docs.)
+
+- **2026-04-01**: `Implement @docs/plans/retrieval-hierarchical.md` (Context: per-page child chunks + `hierarchy.sqlite` parents, manifest `hierarchy_backend` / `hierarchy_schema_version`, `hier_child` RRF head + post-rerank expansion, `expand` on `RetrieveRequest`, env caps, `HierarchyStore`, processor + indexing_service + pipeline + state; tests.)
+
+- **2026-04-01**: `fix : @.../terminals/5.txt:8-85` (Context: pre-commit mypy — inline `hierarchy_backend` / `hierarchy_schema_version` in `IndexManifest.create` instead of `**dict[str, str | int]`; type parent rows as `Sequence[HierarchicalParent]` in `hierarchy_store`; Bandit B608 — replace dynamic `IN (...)` with per-id `WHERE parent_id = ?` queries.)
+
+- **2026-04-01**: `use conda etb env` (Context: run retriever-related pytest with `conda activate etb` so `langchain_core` / `fastapi` resolve; 32 tests passed for pipeline, hyde, bm25, api retriever.)
+
+- **2026-04-08**: `Document the code base with helpful comments to understand why or what is it doing.` (Context: add targeted docstrings and intent-focused comments in retriever modules for maintainability.)
+
+- **2026-04-08**: `Centralize application prompts in src/config/prompts.yaml` (Context: add `prompts.yaml`, `AppPrompts` + `load_prompts()` in `etb_project.prompts_config`, wire `graph_rag` / HyDE / pipeline / captioning; keep `tools/.../llm_config.yaml` for report LLM prompts; tests, README, CONFIGURATION docs.)
+
+- **2026-04-17**: `RuntimeError('Retriever service unreachable: timed out') ... httpx.ReadTimeout` — why does this error happen? (Context: debug-mode investigation; instrument `RemoteRetriever` + retriever `POST /v1/retrieve` with NDJSON logs to `.cursor/debug-01bda8.log`.)
+
+- **2026-04-17**: `Issue reproduced, please proceed.` (Context: logs showed `post_error` at ~60059 ms with `timeout_s` 60 — orchestrator ignored `RETRIEVER_TIMEOUT_S`; wired `retriever_timeout_s` in `OrchestratorSettings` + `_build_retriever`, Compose default `RETRIEVER_TIMEOUT_S=360` for orchestrator; docs/README.)
+
+- **2026-04-17**: `@terminals/11.txt:830-1003` — `ValueError` OpenRouter code **524** in `orion_gate` / `llm.invoke`, ~120s duration. (Context: map LangChain provider error dict to `OrchestratorAPIError` 502; `ETB_LLM_REQUEST_TIMEOUT_S` default 300 for `ChatOpenAI.request_timeout`; docs/README.)
+
+- **2026-04-17**: `The issue has been fixed. Please clean up the instrumentation.` (Context: removed debug NDJSON logging from `remote_retriever.py` and `api/app.py` — session `01bda8`.)
+
+- **2026-04-17**: `continue` / LangSmith tracing for retriever visibility — implement plan (tracing module, GET/PUT `/v1/tracing`, RunnableConfig on graph invoke, `@traceable` on remote/local retriever and `run_retrieval`; docs; use `conda run -n etb` for pytest/uv.)

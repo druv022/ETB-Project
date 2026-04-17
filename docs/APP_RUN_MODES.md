@@ -41,7 +41,7 @@ Typical Docker setup:
 
 - `OPENAI_BASE_URL=https://openrouter.ai/api/v1` (Compose default)
 - `OPENAI_API_KEY` from your `.env` (often mapped from `OPENROUTER_API_KEY`)
-- `OPENAI_MODEL=stepfun/step-3.5-flash` (or another model id)
+- `OPENAI_MODEL=nvidia/nemotron-3-super-120b-a12b:free` (or another model id)
 
 ### Ollama chat via `ollama`
 

@@ -3,6 +3,9 @@
 This module exposes ``build_report_graph`` via a simple factory function so
 that LangGraph Studio (and ``langgraph dev``) can discover and run the
 reporting graph.
+
+Expect the **repository root** on ``PYTHONPATH`` (same as other ``tools.*``
+imports); Studio config typically sets the working directory accordingly.
 """
 
 from __future__ import annotations

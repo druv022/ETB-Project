@@ -19,7 +19,7 @@ def test_get_chat_llm_openai_compat_builds_chatopenai(
     from etb_project import models
 
     monkeypatch.setenv("ETB_LLM_PROVIDER", "openai_compat")
-    monkeypatch.setenv("OPENAI_MODEL", "stepfun/step-3.5-flash")
+    monkeypatch.setenv("OPENAI_MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
     monkeypatch.setenv("OPENAI_API_KEY", "x")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
     llm = models.get_chat_llm()

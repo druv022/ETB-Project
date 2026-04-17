@@ -1,4 +1,19 @@
-"""Main entry point for ETB-project."""
+"""CLI entry point for ETB-project.
+
+This module provides a minimal local developer experience:
+- Load configuration from YAML / env.
+- Choose a retrieval mode:
+  - ``local``: load persisted vector indices from disk (FAISS) and query them.
+  - ``remote``: call the standalone Retriever HTTP API via ``RemoteRetriever``.
+- Either run a single query (when ``config.query`` is set) or an interactive loop
+  backed by the LangGraph RAG pipeline.
+
+Design notes (why it is structured this way):
+- The retriever can be run as a separate service (Docker compose) or in-process.
+  This CLI supports both to make debugging and CI tests simpler.
+- The CLI disables Orion clarification by default in the interactive loop to
+  keep the terminal UX deterministic; the orchestrator enables it by default.
+"""
 
 import logging
 import os
@@ -12,6 +27,10 @@ from etb_project.graph_rag import build_rag_graph
 from etb_project.models import get_ollama_embedding_model as get_embeddings
 from etb_project.models import get_ollama_llm as get_llm
 from etb_project.retrieval import DualRetriever, RemoteRetriever
+from etb_project.tracing.langsmith_config import (
+    build_runnable_config_for_cli,
+    remote_payload_strategy_for_cli,
+)
 from etb_project.vectorstore.faiss_backend import FaissDualVectorStoreBackend
 
 # Configure logging (level applied after config load in main())
@@ -110,6 +129,8 @@ def main() -> None:
 
     mode = os.environ.get("ETB_RETRIEVER_MODE", "local").strip().lower()
     if mode == "remote":
+        # Remote mode is used when running the retriever as a standalone service
+        # (e.g. Docker compose). The orchestrator and UI typically use this mode.
         base = os.environ.get("RETRIEVER_BASE_URL", "").strip().rstrip("/")
         if not base:
             logger.error(
@@ -125,6 +146,7 @@ def main() -> None:
         )
         logger.info("Using remote retriever at %s", base)
     else:
+        # Local mode is intended for quick experiments when indices exist on disk.
         retriever = _build_local_retriever(config)
         logger.info("Dual vector retrieval active (text + captions)")
     logger.info("Application started successfully")
@@ -137,7 +159,9 @@ def main() -> None:
             logger.info("Result %d: %s", i, snippet)
         return
 
-    # Interactive query loop using LangGraph
+    # Interactive query loop using LangGraph.
+    # Orion is disabled here so the CLI always "answers" rather than sometimes
+    # returning a clarification message depending on the model's judgement.
     logger.info("Enter a query (empty line to exit).")
     agent_llm = get_llm()
     rag_graph = build_rag_graph(
@@ -152,7 +176,19 @@ def main() -> None:
         if not line:
             return
 
-        result = rag_graph.invoke({"query": line})
+        strat = remote_payload_strategy_for_cli()
+        run_config = build_runnable_config_for_cli(
+            etb_retriever_mode=mode,
+            retriever_base_url=os.environ.get("RETRIEVER_BASE_URL", "").strip() or None,
+            orch_retriever_strategy=strat,
+            payload_strategy=strat,
+            retriever_k=config.retriever_k,
+        )
+        invoke_in: dict[str, Any] = {"query": line}
+        if run_config is not None:
+            result = rag_graph.invoke(invoke_in, config=run_config)
+        else:
+            result = rag_graph.invoke(invoke_in)
         reply = _get_agent_reply(result)
         if reply:
             print(reply)
