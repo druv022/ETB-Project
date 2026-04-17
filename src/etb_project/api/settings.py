@@ -37,6 +37,7 @@ class RetrieverAPISettings:
     max_upload_files: int
     retrieve_body_max_bytes: int
     api_key: str | None
+    admin_api_token: str | None
     rate_limit_per_minute: int
     log_level: str
     index_shutdown_timeout_s: float
@@ -66,6 +67,13 @@ def load_api_settings() -> RetrieverAPISettings:
     if api_key is not None and api_key.strip() == "":
         api_key = None
 
+    admin_raw = os.environ.get("ETB_ADMIN_API_TOKEN")
+    admin_tok = (
+        str(admin_raw).strip()
+        if admin_raw is not None and str(admin_raw).strip() != ""
+        else None
+    )
+
     return RetrieverAPISettings(
         vector_store_path=vector_root,
         document_output_dir=Path(doc_out),
@@ -77,6 +85,7 @@ def load_api_settings() -> RetrieverAPISettings:
         max_upload_files=_env_int("ETB_MAX_UPLOAD_FILES", 20),
         retrieve_body_max_bytes=_env_int("ETB_MAX_RETRIEVE_BODY_BYTES", 65_536),
         api_key=api_key,
+        admin_api_token=admin_tok,
         rate_limit_per_minute=_env_int("ETB_RATE_LIMIT_PER_MINUTE", 120),
         log_level=cfg.log_level,
         index_shutdown_timeout_s=float(

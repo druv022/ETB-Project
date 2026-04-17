@@ -25,12 +25,18 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: etb_retriever
+    # Named volume mounts are often root-owned; the image runs as UID 1000 (appuser).
+    # Fix ownership on startup, then run the API as appuser (matches Dockerfile USER).
+    user: "0:0"
     depends_on:
       ollama:
         condition: service_healthy
     volumes:
-      - etb_data:/app/data
+      # Bind-mount the repo first; then overlay ``etb_data`` on ``/app/data``.
+      # If ``etb_data`` is listed before ``.:/app``, the bind mount hides the volume
+      # and ``/app/data`` comes from the host (often not writable as UID 1000 on Windows).
       - .:/app
+      - etb_data:/app/data
       - /app/.venv
     environment:
       - PYTHONPATH=/app/src
@@ -46,17 +52,14 @@ services:
     ports:
       - "8000:8000"
     command:
-      [
-        "python",
-        "-m",
-        "uvicorn",
-        "etb_project.api.app:create_app",
-        "--factory",
-        "--host",
-        "0.0.0.0",
-        "--port",
-        "8000",
-      ]
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        mkdir -p /app/data/document_output /app/data/uploads /app/data/vector_index
+        chown -R appuser:appuser /app/data 2>/dev/null || true
+        chmod -R a+rwx /app/data
+        exec runuser -u appuser -- python -m uvicorn etb_project.api.app:create_app --factory --host 0.0.0.0 --port 8000
     restart: unless-stopped
 
   orchestrator:
@@ -115,14 +118,22 @@ services:
     depends_on:
       orchestrator:
         condition: service_started
-    volumes:
-      - .:/app
-      - /app/.venv
     environment:
       - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app/src
       - ORCHESTRATOR_BASE_URL=http://orchestrator:8001
+      - RETRIEVER_BASE_URL=http://retriever:8000
+      # Persist registered users on the shared data volume (override in .env if needed).
+      - ETB_USERS_DB_PATH=/app/data/users.sqlite
+      # Admin UI login: set ETB_ADMIN_* in `.env` for production; defaults suit local Docker only.
+      - ETB_ADMIN_USERNAME=${ETB_ADMIN_USERNAME:-admin}
+      - ETB_ADMIN_PASSWORD=${ETB_ADMIN_PASSWORD:-admin}
     env_file:
       - .env
+    volumes:
+      - .:/app
+      - etb_data:/app/data
+      - /app/.venv
     ports:
       - "8501:8501"
     command: ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
