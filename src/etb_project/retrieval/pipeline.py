@@ -37,6 +37,7 @@ from etb_project.retrieval.hyde import (
     resolve_hyde_mode,
 )
 from etb_project.retrieval.sparse_retriever import Bm25DualSparseRetriever
+from etb_project.tracing.retrieval_trace import maybe_trace_run_retrieval
 from etb_project.vectorstore.hierarchy_store import expand_child_hits_to_parents
 
 logger = logging.getLogger(__name__)
@@ -456,6 +457,7 @@ def run_retrieval(
         tasks.append(("hier_child", _hier_child))
 
     heads = _execute_heads_parallel(tasks)
+    head_counts = [{"head_id": h, "doc_count": len(xs)} for h, xs in heads]
 
     k_rrf = settings.rrf_k
     cap = settings.ensemble_cap
@@ -472,6 +474,23 @@ def run_retrieval(
         )
 
     if not merged:
+        maybe_trace_run_retrieval(
+            request=request,
+            k=k,
+            strategy=strategy,
+            settings=settings,
+            head_counts=head_counts,
+            bm25_loaded=bm25 is not None,
+            hierarchy_active=hierarchy_sqlite_path is not None,
+            hyde_mode=hyde_mode,
+            reranker_mode=_reranker_mode(request, settings),
+            expand_resolved=_resolve_expand(
+                request, settings, hierarchy_sqlite_path is not None
+            ),
+            final_doc_count=0,
+            request_id=request_id,
+            vector_store_root=str(getattr(settings, "vector_store_path", "") or ""),
+        )
         return []
 
     mode = _reranker_mode(request, settings)
@@ -506,4 +525,20 @@ def run_retrieval(
             max_parents=settings.max_hierarchy_parents,
             max_total_chars=settings.parent_context_chars,
         )
+
+    maybe_trace_run_retrieval(
+        request=request,
+        k=k,
+        strategy=strategy,
+        settings=settings,
+        head_counts=head_counts,
+        bm25_loaded=bm25 is not None,
+        hierarchy_active=hierarchy_active,
+        hyde_mode=hyde_mode,
+        reranker_mode=mode,
+        expand_resolved=expand,
+        final_doc_count=len(top),
+        request_id=request_id,
+        vector_store_root=str(getattr(settings, "vector_store_path", "") or ""),
+    )
     return top

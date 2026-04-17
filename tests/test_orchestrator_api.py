@@ -44,7 +44,7 @@ def test_chat_happy_path_returns_answer_and_sources(client: TestClient) -> None:
 
     def fake_build_graph(*args: object, **kwargs: object) -> object:
         class G:
-            def invoke(self, _state: dict) -> dict:
+            def invoke(self, _state: dict, **_kw: object) -> dict:
                 return {
                     "answer": "hello",
                     "context_docs": [mock_doc],
@@ -73,7 +73,7 @@ def test_chat_clarify_phase_empty_sources(client: TestClient) -> None:
 
     def fake_build_graph(*args: object, **kwargs: object) -> object:
         class G:
-            def invoke(self, _state: dict) -> dict:
+            def invoke(self, _state: dict, **_kw: object) -> dict:
                 return {
                     "answer": "Which quarter?",
                     "context_docs": [],
@@ -100,7 +100,7 @@ def test_chat_clarify_phase_empty_sources(client: TestClient) -> None:
 def test_chat_returns_502_on_empty_answer(client: TestClient) -> None:
     def fake_build_graph(*args: object, **kwargs: object) -> object:
         class G:
-            def invoke(self, _state: dict) -> dict:
+            def invoke(self, _state: dict, **_kw: object) -> dict:
                 return {"answer": "   "}
 
         return G()
@@ -118,7 +118,7 @@ def test_chat_returns_502_on_llm_provider_524(client: TestClient) -> None:
 
     def fake_build_graph(*args: object, **kwargs: object) -> object:
         class G:
-            def invoke(self, _state: dict) -> dict:
+            def invoke(self, _state: dict, **_kw: object) -> dict:
                 raise ValueError({"message": "Provider returned error", "code": 524})
 
         return G()

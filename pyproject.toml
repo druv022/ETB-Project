@@ -34,6 +34,8 @@ dependencies = [
     "langchain-text-splitters>=0.3",
     "langchain-ollama>=0.3.0",
     "langchain-openai>=0.3.0",
+    "langgraph>=0.2.0",
+    "langsmith>=0.1.0",
     "openai>=1.40.0",
     "faiss-cpu>=1.7.4",
     "unstructured>=0.13.0",
@@ -160,6 +162,10 @@ disallow_untyped_decorators = false
 [[tool.mypy.overrides]]
 module = "etb_project.orchestrator.app"
 disallow_untyped_decorators = false
+
+[[tool.mypy.overrides]]
+module = "etb_project.tracing.*"
+warn_unused_ignores = false
 
 [tool.pytest.ini_options]
 minversion = "7.0"

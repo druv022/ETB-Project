@@ -202,7 +202,10 @@ def test_main_interactive_uses_graph_with_dual_retriever(tmp_path: Path) -> None
 
     mock_build_graph.assert_called_once()
     assert mock_build_graph.call_args.kwargs["retriever"] is mock_dual_retriever
-    mock_graph.invoke.assert_called_once_with({"query": "hello"})
+    mock_graph.invoke.assert_called_once()
+    args, kwargs = mock_graph.invoke.call_args
+    assert args[0] == {"query": "hello"}
+    assert "config" in kwargs
 
 
 def test_main_function_import() -> None:

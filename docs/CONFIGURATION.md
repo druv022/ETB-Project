@@ -128,6 +128,8 @@ Local vs remote retrieval (overrides default **local** dual-FAISS load):
   - HTTP **read** timeout in seconds for the orchestrator’s `POST /v1/retrieve` client (default `60` outside Compose). Docker Compose sets default `180` for the orchestrator service so slow embedding or HyDE runs are less likely to hit `httpx.ReadTimeout`. Increase further if you still see timeouts.
 - `ORCH_RETRIEVER_K`
   - Default `k` used by `POST /v1/chat` when the request body doesn’t specify `k`.
+- `ORCH_RETRIEVER_STRATEGY`
+  - Optional. When set to `dense` or `hybrid`, forwarded as `strategy` on `POST /v1/retrieve`. When unset, the retriever uses its default (`ETB_RETRIEVE_STRATEGY`).
 - `ORCH_SESSION_TTL_SECONDS`
   - Session TTL for in-memory chat history.
 - `ORCH_CORS_ALLOW_ORIGINS`
@@ -193,6 +195,39 @@ Limits:
 - `ETB_MAX_UPLOAD_FILES` (default: 20 files per request)
 - `ETB_MAX_RETRIEVE_BODY_BYTES` (default: 65536)
 - `ETB_RATE_LIMIT_PER_MINUTE` (default: 120)
+
+### LangSmith tracing (orchestrator + retriever + CLI)
+
+ETB-owned tracing (``@traceable`` spans, RunnableConfig metadata, retrieval pipeline summaries) is **on by default** when env vars are unset. LangChain’s global tracer still needs ``LANGCHAIN_API_KEY`` to upload runs to LangSmith.
+
+**Boot environment (defaults when unset = on / enabled):**
+
+- `LANGCHAIN_TRACING_V2` — default **true** (export LangGraph/LangChain runs; turning **off** may require a **process restart**).
+- `LANGCHAIN_API_KEY` — LangSmith API key (required for uploads).
+- `LANGCHAIN_PROJECT`, `LANGCHAIN_ENDPOINT` — optional LangSmith project / endpoint.
+- `ETB_TRACE_ENABLED` — default **true** (gates ETB ``@traceable`` spans and graph ``RunnableConfig`` metadata).
+- `ETB_TRACE_LOG_QUERIES` — default **true** (truncated query in traces); set **false** for length + hash prefix only.
+
+**Runtime HTTP (no redeploy for ETB flags):**
+
+Both the **Orchestrator** and **Retriever** expose `GET /v1/tracing` and `PUT /v1/tracing` with a JSON body. Only fields you send are updated (partial PUT).
+
+```bash
+# Orchestrator (example port 8001)
+curl -s -X PUT "http://localhost:8001/v1/tracing" \
+  -H "Content-Type: application/json" \
+  -d '{"log_queries": false}'
+```
+
+```bash
+# Retriever API (example port 8000); when RETRIEVER_API_KEY is set, send Bearer:
+curl -s -X PUT "http://localhost:8000/v1/tracing" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <RETRIEVER_API_KEY>" \
+  -d '{"enabled": false}'
+```
+
+The orchestrator **PUT** is open by default (treat as **dev-only**); use a reverse proxy or firewall in production.
 
 ### Captioning secrets
 

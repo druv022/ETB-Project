@@ -83,7 +83,7 @@ services:
       - PYTHONUNBUFFERED=1
       # Orchestrator -> Retriever (httpx read timeout; retrieval can exceed 60s with HyDE/embedding load)
       - RETRIEVER_BASE_URL=http://retriever:8000
-      - RETRIEVER_TIMEOUT_S=${RETRIEVER_TIMEOUT_S:-180}
+      - RETRIEVER_TIMEOUT_S=${RETRIEVER_TIMEOUT_S:-360}
       # LLM provider selection (see src/etb_project/models.py)
       - ETB_LLM_PROVIDER=${ETB_LLM_PROVIDER:-openai_compat}
       # OpenAI-compatible provider (use OpenRouter by setting OPENAI_BASE_URL)
@@ -97,6 +97,8 @@ services:
       - OLLAMA_CHAT_MODEL=${OLLAMA_CHAT_MODEL:-qwen3.5:9b}
       - OLLAMA_TEMPERATURE=${OLLAMA_TEMPERATURE:-0}
       - ORCH_RETRIEVER_K=${ORCH_RETRIEVER_K:-10}
+      # Optional LangSmith: LANGCHAIN_TRACING_V2, LANGCHAIN_API_KEY, LANGCHAIN_PROJECT
+      # Optional ETB tracing toggles (defaults on): ETB_TRACE_ENABLED, ETB_TRACE_LOG_QUERIES
       - ORCH_SESSION_TTL_SECONDS=${ORCH_SESSION_TTL_SECONDS:-7200}
     env_file:
       - .env

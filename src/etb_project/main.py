@@ -27,6 +27,10 @@ from etb_project.graph_rag import build_rag_graph
 from etb_project.models import get_ollama_embedding_model as get_embeddings
 from etb_project.models import get_ollama_llm as get_llm
 from etb_project.retrieval import DualRetriever, RemoteRetriever
+from etb_project.tracing.langsmith_config import (
+    build_runnable_config_for_cli,
+    remote_payload_strategy_for_cli,
+)
 from etb_project.vectorstore.faiss_backend import FaissDualVectorStoreBackend
 
 # Configure logging (level applied after config load in main())
@@ -172,7 +176,19 @@ def main() -> None:
         if not line:
             return
 
-        result = rag_graph.invoke({"query": line})
+        strat = remote_payload_strategy_for_cli()
+        run_config = build_runnable_config_for_cli(
+            etb_retriever_mode=mode,
+            retriever_base_url=os.environ.get("RETRIEVER_BASE_URL", "").strip() or None,
+            orch_retriever_strategy=strat,
+            payload_strategy=strat,
+            retriever_k=config.retriever_k,
+        )
+        invoke_in: dict[str, Any] = {"query": line}
+        if run_config is not None:
+            result = rag_graph.invoke(invoke_in, config=run_config)
+        else:
+            result = rag_graph.invoke(invoke_in)
         reply = _get_agent_reply(result)
         if reply:
             print(reply)

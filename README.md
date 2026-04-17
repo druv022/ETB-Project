@@ -77,7 +77,7 @@ The repo ships a **standalone retriever HTTP API** (retrieve + index PDFs). The 
 **Docker note (Sources / images):** The retriever stores extracted PDF images under `ETB_DOCUMENT_OUTPUT_DIR` (Compose sets this to `/app/data/document_output` on the shared `etb_data` volume). The Streamlit UI loads them via the orchestrator at `GET /v1/assets/...`. If you set `RETRIEVER_API_KEY` on the retriever, set the same value in the UI environment (e.g. in `.env` used by Compose) as `RETRIEVER_API_KEY` or `ORCHESTRATOR_ASSET_BEARER_TOKEN` so image requests are authorized.
 
 For other run modes (CLI, provider switching, health checks, etc.), see [`docs/APP_RUN_MODES.md`](docs/APP_RUN_MODES.md).
-Compose starts **Ollama** (pulls the embedding model automatically), then the **retriever** once Ollama is healthy. The orchestrator uses **`RETRIEVER_TIMEOUT_S`** (default **180** seconds in Compose) for calls to the retriever; override in `.env` if retrieval still times out. For **OpenRouter** or other remote chat APIs, **`ETB_LLM_REQUEST_TIMEOUT_S`** (default **300** seconds) sets the LLM client timeout; if you see **HTTP 524** / provider timeout errors, try **`ETB_ORION_CLARIFY=0`** (one fewer LLM call before retrieval), a faster model, or local **`ETB_LLM_PROVIDER=ollama`**.
+Compose starts **Ollama** (pulls the embedding model automatically), then the **retriever** once Ollama is healthy. The orchestrator uses **`RETRIEVER_TIMEOUT_S`** (default **360** seconds in Compose) for calls to the retriever; override in `.env` if retrieval still times out. For **OpenRouter** or other remote chat APIs, **`ETB_LLM_REQUEST_TIMEOUT_S`** (default **300** seconds) sets the LLM client timeout; if you see **HTTP 524** / provider timeout errors, try **`ETB_ORION_CLARIFY=0`** (one fewer LLM call before retrieval), a faster model, or local **`ETB_LLM_PROVIDER=ollama`**.
 
 - **Check health**:
 
@@ -85,6 +85,15 @@ Compose starts **Ollama** (pulls the embedding model automatically), then the **
 curl http://localhost:8000/v1/health
 curl http://localhost:8000/v1/ready
 ```
+
+- **LangSmith / tracing toggles** (defaults on; see [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)):
+
+```bash
+curl -s http://localhost:8001/v1/tracing
+curl -s -X PUT http://localhost:8001/v1/tracing -H "Content-Type: application/json" -d '{"log_queries":false}'
+```
+
+Set `LANGCHAIN_API_KEY` (and optionally `LANGCHAIN_PROJECT`) for LangSmith uploads.
 
 - **Use the RAG orchestrator against the retriever**:
 

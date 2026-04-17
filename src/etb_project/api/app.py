@@ -44,6 +44,7 @@ from etb_project.api.schemas import (
 from etb_project.api.settings import RetrieverAPISettings, load_api_settings
 from etb_project.api.state import RetrieverServiceState, _serialize_metadata
 from etb_project.retrieval.exceptions import HybridSparseUnavailableError
+from etb_project.tracing.routes import build_tracing_router
 
 logger = logging.getLogger(__name__)
 
@@ -274,6 +275,12 @@ def create_app() -> FastAPI:
         version="1.0.0",
         description="Dual FAISS retrieval and PDF indexing (no RAG graph).",
         lifespan=lifespan,
+    )
+    app.include_router(
+        build_tracing_router(
+            "etb-retriever-api",
+            put_dependencies=[Depends(require_api_key_if_configured)],
+        )
     )
     app.add_middleware(AssetTraversalGuardMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
