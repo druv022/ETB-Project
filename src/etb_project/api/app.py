@@ -97,8 +97,9 @@ async def require_retriever_admin(
             "NOT_FOUND",
             "Admin API is not enabled.",
         )
-    presented = creds.credentials if creds else ""
-    if not presented or not constant_time_equals(presented, tok):
+    presented = creds.credentials if creds else None
+    candidate = presented if presented else ("0" * len(tok))
+    if not constant_time_equals(candidate, tok):
         raise RetrieverAPIError(
             401,
             "UNAUTHORIZED",

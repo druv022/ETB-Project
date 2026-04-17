@@ -149,8 +149,9 @@ async def require_orchestrator_chat_key(
     expected = settings.orchestrator_chat_api_key
     if not expected:
         return
-    presented = creds.credentials if creds else ""
-    if not presented or not constant_time_equals(presented, expected):
+    presented = creds.credentials if creds else None
+    candidate = presented if presented else ("0" * len(expected))
+    if not constant_time_equals(candidate, expected):
         raise OrchestratorAPIError(
             401,
             "UNAUTHORIZED",
@@ -169,8 +170,9 @@ async def require_orchestrator_admin(
             "NOT_FOUND",
             "Admin API is not enabled.",
         )
-    presented = creds.credentials if creds else ""
-    if not presented or not constant_time_equals(presented, tok):
+    presented = creds.credentials if creds else None
+    candidate = presented if presented else ("0" * len(tok))
+    if not constant_time_equals(candidate, tok):
         raise OrchestratorAPIError(
             401,
             "UNAUTHORIZED",
