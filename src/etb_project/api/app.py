@@ -44,7 +44,7 @@ from etb_project.api.schemas import (
 )
 from etb_project.api.settings import RetrieverAPISettings, load_api_settings
 from etb_project.api.state import RetrieverServiceState, _serialize_metadata
-from etb_project.common.admin_bearer import constant_time_equals
+from etb_project.common.admin_bearer import constant_time_token_match
 from etb_project.common.http_audit import HttpAuditRingBuffer
 from etb_project.retrieval.exceptions import HybridSparseUnavailableError
 from etb_project.tracing.routes import build_tracing_router
@@ -98,8 +98,7 @@ async def require_retriever_admin(
             "Admin API is not enabled.",
         )
     presented = creds.credentials if creds else None
-    candidate = presented if presented else ("0" * len(tok))
-    if not constant_time_equals(candidate, tok):
+    if not constant_time_token_match(presented, tok):
         raise RetrieverAPIError(
             401,
             "UNAUTHORIZED",
