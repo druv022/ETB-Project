@@ -142,3 +142,11 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-04-08**: `Document the code base with helpful comments to understand why or what is it doing.` (Context: add targeted docstrings and intent-focused comments in retriever modules for maintainability.)
 
 - **2026-04-08**: `Centralize application prompts in src/config/prompts.yaml` (Context: add `prompts.yaml`, `AppPrompts` + `load_prompts()` in `etb_project.prompts_config`, wire `graph_rag` / HyDE / pipeline / captioning; keep `tools/.../llm_config.yaml` for report LLM prompts; tests, README, CONFIGURATION docs.)
+
+- **2026-04-17**: `RuntimeError('Retriever service unreachable: timed out') ... httpx.ReadTimeout` — why does this error happen? (Context: debug-mode investigation; instrument `RemoteRetriever` + retriever `POST /v1/retrieve` with NDJSON logs to `.cursor/debug-01bda8.log`.)
+
+- **2026-04-17**: `Issue reproduced, please proceed.` (Context: logs showed `post_error` at ~60059 ms with `timeout_s` 60 — orchestrator ignored `RETRIEVER_TIMEOUT_S`; wired `retriever_timeout_s` in `OrchestratorSettings` + `_build_retriever`, Compose default `RETRIEVER_TIMEOUT_S=180` for orchestrator; docs/README.)
+
+- **2026-04-17**: `@terminals/11.txt:830-1003` — `ValueError` OpenRouter code **524** in `orion_gate` / `llm.invoke`, ~120s duration. (Context: map LangChain provider error dict to `OrchestratorAPIError` 502; `ETB_LLM_REQUEST_TIMEOUT_S` default 300 for `ChatOpenAI.request_timeout`; docs/README.)
+
+- **2026-04-17**: `The issue has been fixed. Please clean up the instrumentation.` (Context: removed debug NDJSON logging from `remote_retriever.py` and `api/app.py` — session `01bda8`.)

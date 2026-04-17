@@ -21,6 +21,8 @@ class OrchestratorSettings:
     port: int
     retriever_base_url: str
     default_k: int
+    # Seconds for httpx read timeout on ``POST /v1/retrieve`` (same env as CLI remote mode).
+    retriever_timeout_s: float
     # When ``dense`` or ``hybrid``, forwarded as JSON ``strategy`` on ``POST /v1/retrieve``.
     retriever_strategy: str | None
 
@@ -41,6 +43,7 @@ def load_orchestrator_settings() -> OrchestratorSettings:
 
     retriever_base_url = os.environ.get("RETRIEVER_BASE_URL", "").strip().rstrip("/")
     default_k = int(os.environ.get("ORCH_RETRIEVER_K", "10"))
+    retriever_timeout_s = float(os.environ.get("RETRIEVER_TIMEOUT_S", "60"))
 
     strat_raw = os.environ.get("ORCH_RETRIEVER_STRATEGY", "").strip().lower()
     retriever_strategy = strat_raw if strat_raw in ("dense", "hybrid") else None
@@ -53,6 +56,7 @@ def load_orchestrator_settings() -> OrchestratorSettings:
         port=port,
         retriever_base_url=retriever_base_url,
         default_k=default_k,
+        retriever_timeout_s=retriever_timeout_s,
         retriever_strategy=retriever_strategy,
         cors_allow_origins=cors_allow_origins,
         session_ttl_seconds=session_ttl_seconds,

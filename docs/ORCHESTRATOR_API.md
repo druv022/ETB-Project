@@ -103,7 +103,7 @@ OpenAI-compatible provider (includes OpenRouter via `OPENAI_BASE_URL`):
 
 - `OPENAI_BASE_URL` (default: `https://openrouter.ai/api/v1`)
 - `OPENAI_API_KEY`
-- `OPENAI_MODEL` (default: `stepfun/step-3.5-flash`)
+- `OPENAI_MODEL` (default: `nvidia/nemotron-3-super-120b-a12b:free`)
 - `OPENAI_TEMPERATURE` (default: `0`)
 
 Ollama provider:

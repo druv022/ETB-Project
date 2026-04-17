@@ -45,7 +45,7 @@ services:
       - ETB_LLM_PROVIDER=${ETB_LLM_PROVIDER:-openai_compat}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://openrouter.ai/api/v1}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-${OPENROUTER_API_KEY:-}}
-      - OPENAI_MODEL=${OPENAI_MODEL:-stepfun/step-3.5-flash}
+      - OPENAI_MODEL=${OPENAI_MODEL:-nvidia/nemotron-3-super-120b-a12b:free}
       - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0}
       - OLLAMA_CHAT_MODEL=${OLLAMA_CHAT_MODEL:-qwen3.5:9b}
       - OLLAMA_TEMPERATURE=${OLLAMA_TEMPERATURE:-0}
@@ -81,14 +81,15 @@ services:
     environment:
       - PYTHONPATH=/app/src
       - PYTHONUNBUFFERED=1
-      # Orchestrator -> Retriever
+      # Orchestrator -> Retriever (httpx read timeout; retrieval can exceed 60s with HyDE/embedding load)
       - RETRIEVER_BASE_URL=http://retriever:8000
+      - RETRIEVER_TIMEOUT_S=${RETRIEVER_TIMEOUT_S:-180}
       # LLM provider selection (see src/etb_project/models.py)
       - ETB_LLM_PROVIDER=${ETB_LLM_PROVIDER:-openai_compat}
       # OpenAI-compatible provider (use OpenRouter by setting OPENAI_BASE_URL)
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://openrouter.ai/api/v1}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-${OPENROUTER_API_KEY:-}}
-      - OPENAI_MODEL=${OPENAI_MODEL:-stepfun/step-3.5-flash}
+      - OPENAI_MODEL=${OPENAI_MODEL:-nvidia/nemotron-3-super-120b-a12b:free}
       - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0}
       # Ollama provider (optional)
       - OLLAMA_HOST=${OLLAMA_HOST:-}

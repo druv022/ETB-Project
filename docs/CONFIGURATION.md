@@ -124,6 +124,8 @@ Local vs remote retrieval (overrides default **local** dual-FAISS load):
 
 - `RETRIEVER_BASE_URL`
   - Base URL for the retriever API (required for orchestrator; in Compose it’s `http://retriever:8000`).
+- `RETRIEVER_TIMEOUT_S`
+  - HTTP **read** timeout in seconds for the orchestrator’s `POST /v1/retrieve` client (default `60` outside Compose). Docker Compose sets default `180` for the orchestrator service so slow embedding or HyDE runs are less likely to hit `httpx.ReadTimeout`. Increase further if you still see timeouts.
 - `ORCH_RETRIEVER_K`
   - Default `k` used by `POST /v1/chat` when the request body doesn’t specify `k`.
 - `ORCH_SESSION_TTL_SECONDS`
@@ -139,6 +141,8 @@ LLM provider selection:
 
 - `ETB_LLM_PROVIDER`
   - `openai_compat` (default) or `ollama`.
+- `ETB_LLM_REQUEST_TIMEOUT_S`
+  - Per-request timeout in seconds for **OpenAI-compatible** chat calls (`ChatOpenAI.request_timeout`, default **300**). The RAG graph may run **Orion** then **answer** (two LLM calls when `ETB_ORION_CLARIFY` is on); slow or remote providers (e.g. OpenRouter) can hit HTTP **524** upstream timeouts—increase this value, disable Orion (`ETB_ORION_CLARIFY=0`), or switch to a faster model / local Ollama.
 
 OpenAI-compatible chat backend (also used for OpenRouter):
 

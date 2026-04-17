@@ -107,10 +107,19 @@ class OpenAICompatibleProvider(ChatModelProvider):
     name = "openai_compat"
 
     def build_chat_model(self) -> BaseChatModel:
-        model = os.environ.get("OPENAI_MODEL", "stepfun/step-3.5-flash").strip()
+        model = os.environ.get(
+            "OPENAI_MODEL", "nvidia/nemotron-3-super-120b-a12b:free"
+        ).strip()
         temperature = float(os.environ.get("OPENAI_TEMPERATURE", "0"))
 
         kwargs: dict[str, Any] = {"model": model, "temperature": temperature}
+
+        # httpx read timeout for each LLM request (Orion + answer; OpenRouter can be slow).
+        req_to = os.environ.get("ETB_LLM_REQUEST_TIMEOUT_S", "").strip()
+        if req_to:
+            kwargs["request_timeout"] = float(req_to)
+        else:
+            kwargs["request_timeout"] = 300.0
 
         api_key = os.environ.get("OPENAI_API_KEY")
         if api_key and api_key.strip():

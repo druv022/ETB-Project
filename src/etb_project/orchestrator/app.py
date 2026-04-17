@@ -25,6 +25,7 @@ from starlette.middleware.cors import CORSMiddleware
 from etb_project.graph_rag import build_rag_graph
 from etb_project.models import get_chat_llm
 from etb_project.orchestrator.exceptions import OrchestratorAPIError
+from etb_project.orchestrator.llm_provider_errors import map_provider_invoke_error
 from etb_project.orchestrator.schemas import (
     ChatRequest,
     ChatResponse,
@@ -115,7 +116,7 @@ def _build_retriever(settings: OrchestratorSettings, k: int) -> RemoteRetriever:
     return RemoteRetriever(
         settings.retriever_base_url,
         k=k,
-        timeout_s=60.0,
+        timeout_s=settings.retriever_timeout_s,
         strategy=settings.retriever_strategy,
     )
 
@@ -261,9 +262,15 @@ def create_app() -> FastAPI:
         graph = build_rag_graph(llm=llm, retriever=retriever)
 
         prior = deserialize_messages(sessions.get_messages(body.session_id))
-        result: dict[str, Any] = graph.invoke(
-            {"query": body.message, "messages": prior}
-        )
+        try:
+            result: dict[str, Any] = graph.invoke(
+                {"query": body.message, "messages": prior}
+            )
+        except Exception as exc:
+            mapped = map_provider_invoke_error(exc)
+            if mapped is not None:
+                raise mapped from exc
+            raise
         answer = (result.get("answer") or "").strip()
         if not answer:
             raise OrchestratorAPIError(
