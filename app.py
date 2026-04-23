@@ -41,14 +41,43 @@ def _logout() -> None:
     st.session_state.auth_role = None
     st.session_state.auth_username = None
     st.session_state.admin_nav_sel = "Orion"
+    st.session_state.messages = []
+    st.session_state.session_id = os.urandom(16).hex()
+    st.session_state.last_sources = []
 
 
 def _render_header_bar() -> None:
     role = st.session_state.get("auth_role")
     user = st.session_state.get("auth_username") or ""
     label = "Administrator" if role == "admin" else "User"
-    st.sidebar.markdown(f"**{user}**  \n_{label}_")
-    if st.sidebar.button("Log out", key="btn_logout"):
+    initial = (user[:1] or "?").upper()
+    role_class = "admin" if role == "admin" else "user"
+
+    st.sidebar.markdown(
+        f"""
+        <div class="orion-sidebar-brand">
+          <div class="orion-sidebar-mark">
+            <div class="orion-sidebar-orb"></div>
+          </div>
+          <div class="orion-sidebar-brand-text">
+            <div class="orion-sidebar-brand-title">Orion</div>
+            <div class="orion-sidebar-brand-sub">Executive AI</div>
+          </div>
+        </div>
+        <div class="orion-sidebar-user">
+          <div class="orion-sidebar-avatar">{initial}</div>
+          <div class="orion-sidebar-user-text">
+            <div class="orion-sidebar-username">{user}</div>
+            <div class="orion-sidebar-role orion-sidebar-role-{role_class}">
+              <span class="dot"></span>{label}
+            </div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if st.sidebar.button("Log out", key="btn_logout", use_container_width=True):
         _logout()
         st.rerun()
 
