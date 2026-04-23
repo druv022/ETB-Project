@@ -40,9 +40,7 @@ def test_get_chat_llm_openai_compat_falls_back_to_openrouter_api_key(
     assert llm.__class__.__name__ == "ChatOpenAI"
     key = getattr(llm, "openai_api_key", None)
     assert key is not None
-    revealed = (
-        key.get_secret_value() if hasattr(key, "get_secret_value") else str(key)
-    )
+    revealed = key.get_secret_value() if hasattr(key, "get_secret_value") else str(key)
     assert revealed == "sk-or-v1-from-env"
 
 
