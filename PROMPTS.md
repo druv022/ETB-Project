@@ -180,3 +180,7 @@ This file logs all prompts given to the AI agent for this project.
 - **2026-04-16**: `Ahora,  hay texto sobrepuesto que hace eso ahi ?` (Context: diagnosed overlap in expander title as CSS over-customization of `summary`; simplified expander summary styling in `src/etb_project/ui/orion_theme.py` by removing forced flex/marker overrides and normalizing summary text line-height.)
 
 - **2026-04-16**: `Fijate como todavai esta sobrepuesto` (Context: root cause was global `span` font override forcing Inter on Streamlit Material Symbols; fixed in `src/etb_project/ui/orion_theme.py` by excluding generic span from typography rule and restoring Material Symbols font-family for icon selectors.)
+
+- **2026-04-24**: `In the light mode, change the colour of the chatbox at the bottom. I'm not able to view any text that I type there. It should be legible when an user types an input.` (Context: Chat input was invisible in light mode due to hardcoded white text color. Added CSS `@media (prefers-color-scheme: light)` query to `src/etb_project/ui/orion_theme.py` to show dark text on white background for the textarea and input container when users have light mode enabled.)
+
+- **2026-04-24**: `Just one change, the built in text that appears as described information you want from Orion should also be in a dark color. Preferably change that to black color now that it is in white color and it's not clearly visible.` (Context: Updated placeholder text color from `rgba(0, 0, 0, 0.45)` to solid `#000000` (black) in light mode CSS for better visibility.)
