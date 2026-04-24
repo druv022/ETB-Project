@@ -731,6 +731,28 @@ ORION_STYLE_MARKDOWN = """
     outline: none !important;
   }
 
+  /* Light mode support for chat input visibility */
+  @media (prefers-color-scheme: light) {
+    div[data-testid="stChatInput"] textarea,
+    div[data-testid="stChatInput"] textarea:focus,
+    div[data-testid="stChatInput"] textarea:hover,
+    div[data-testid="stChatInput"] textarea:active {
+      color: #1a1a1a !important;
+      background: rgba(255, 255, 255, 0.95) !important;
+      border: 1px solid rgba(0, 0, 0, 0.15) !important;
+    }
+    
+    div[data-testid="stChatInput"] textarea::placeholder {
+      color: rgba(0, 0, 0, 0.45) !important;
+    }
+    
+    div[data-testid="stChatInput"] {
+      background: rgba(255, 255, 255, 0.85) !important;
+      border: 1px solid rgba(0, 0, 0, 0.12) !important;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+    }
+  }
+
   div[data-testid="stChatInput"] textarea:-webkit-autofill,
   div[data-testid="stChatInput"] textarea:-webkit-autofill:hover,
   div[data-testid="stChatInput"] textarea:-webkit-autofill:focus {
