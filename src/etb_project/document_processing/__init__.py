@@ -17,6 +17,11 @@ from .pymupdf_extractor import (
     extract_images,
     extract_page_documents,
 )
+from .table_extractor import (
+    extract_page_documents_with_tables,
+    extract_page_text_with_tables,
+    extract_tables_from_page,
+)
 
 __all__ = [
     "ChatCompletionImageCaptioner",
@@ -27,4 +32,7 @@ __all__ = [
     "OpenRouterImageCaptioner",
     "extract_images",
     "extract_page_documents",
+    "extract_page_documents_with_tables",
+    "extract_page_text_with_tables",
+    "extract_tables_from_page",
 ]
