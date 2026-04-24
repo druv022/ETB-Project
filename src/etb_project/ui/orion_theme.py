@@ -743,7 +743,7 @@ ORION_STYLE_MARKDOWN = """
     }
     
     div[data-testid="stChatInput"] textarea::placeholder {
-      color: rgba(0, 0, 0, 0.45) !important;
+      color: #000000 !important;
     }
     
     div[data-testid="stChatInput"] {
