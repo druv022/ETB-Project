@@ -21,27 +21,44 @@ def extract_tables_from_page(page: fitz.Page) -> list[dict]:
     """
     tables = []
     try:
-        # Use PyMuPDF's table finder
-        table_finder = page.find_tables()
+        # Use PyMuPDF's table finder with timeout protection
+        import signal
         
-        if not table_finder.tables:
-            return []
+        def timeout_handler(signum, frame):
+            raise TimeoutError("Table extraction timeout")
         
-        for table_index, table in enumerate(table_finder.tables):
-            # Extract table data
-            table_data = table.extract()
+        # Set a 10-second timeout for table detection per page
+        # This is Windows compatible - skip timeout on Windows
+        import platform
+        if platform.system() != 'Windows':
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(10)
+        
+        try:
+            table_finder = page.find_tables()
             
-            # Convert to markdown for better LLM understanding
-            markdown = _table_to_markdown(table_data)
+            if not table_finder.tables:
+                return []
             
-            tables.append({
-                "index": table_index,
-                "rows": table_data,
-                "bbox": table.bbox,
-                "markdown": markdown,
-            })
-    except Exception:
-        # If table detection fails, return empty list
+            for table_index, table in enumerate(table_finder.tables):
+                # Extract table data
+                table_data = table.extract()
+                
+                # Convert to markdown for better LLM understanding
+                markdown = _table_to_markdown(table_data)
+                
+                tables.append({
+                    "index": table_index,
+                    "rows": table_data,
+                    "bbox": table.bbox,
+                    "markdown": markdown,
+                })
+        finally:
+            if platform.system() != 'Windows':
+                signal.alarm(0)
+                
+    except (TimeoutError, Exception):
+        # If table detection fails or times out, return empty list
         # This ensures the pipeline continues even if table extraction has issues
         pass
     

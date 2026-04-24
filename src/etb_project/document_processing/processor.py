@@ -193,8 +193,9 @@ def _process_pdf_to_text_and_caption_docs(
         else output_root.resolve()
     )
 
-    # 1) Page-level text with enhanced table extraction
-    page_docs = extract_page_documents_with_tables(pdf_path_obj)
+    # 1) Page-level text - use standard extraction for now to avoid hanging
+    # Table extraction can be enabled later with a flag
+    page_docs = extract_page_documents(pdf_path_obj)
 
     # 2) Images
     images_by_page = extract_images(pdf_path_obj, output_root)
