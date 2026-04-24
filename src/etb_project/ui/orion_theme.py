@@ -742,10 +742,6 @@ ORION_STYLE_MARKDOWN = """
       border: 1px solid rgba(0, 0, 0, 0.15) !important;
     }
     
-    div[data-testid="stChatInput"] textarea::placeholder {
-      color: #000000 !important;
-    }
-    
     div[data-testid="stChatInput"] {
       background: rgba(255, 255, 255, 0.85) !important;
       border: 1px solid rgba(0, 0, 0, 0.12) !important;
@@ -762,7 +758,7 @@ ORION_STYLE_MARKDOWN = """
   }
 
   div[data-testid="stChatInput"] textarea::placeholder {
-    color: rgba(238, 238, 244, 0.52) !important;
+    color: #000000 !important;
   }
 
 
